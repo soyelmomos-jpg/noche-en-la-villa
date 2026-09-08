@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
 <title>Noche en la Villa — RPG</title>
 <style>
   :root{
@@ -116,9 +116,21 @@
   #codes-list{font-size:.82rem; line-height:1.8; border-top:1px dashed rgba(124,77,255,.25); margin-top:10px; padding-top:8px;}
   .fade-in{animation:fadeIn .35s;}
   @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  button, .node{-webkit-tap-highlight-color:transparent; touch-action:manipulation;}
   @media(max-width:480px){
     .actions{grid-template-columns:1fr 1fr;}
     .node{width:46%;}
+  }
+  @media(max-width:600px){
+    .wrap{padding:12px 10px 34px;}
+    .logo .n{font-size:1.55rem;}
+    .logo .v{font-size:.78rem;}
+    .panel{padding:13px;}
+    button{min-height:52px; font-size:1rem;}
+    .node{width:47%; min-height:104px;}
+    .node .icon{font-size:1.5rem;}
+    .enemy-card .eicon{font-size:2.4rem;}
+    .actions{gap:8px;}
   }
   .footer{text-align:center; color:var(--dim); font-size:.72rem; margin-top:26px;}
   ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-thumb{background:#3a2f52; border-radius:8px;}
@@ -183,7 +195,7 @@
       <div class="map" id="map-container"></div>
     </div>
     <div class="panel dim" style="font-size:.8rem;">
-      🡒 Elegí un destino (los conectados a tu lugar). El risco es que te crucen <b>de noche</b>. En la <b>Esquina del Almacén</b> y la <b>Casita del Tano</b> podés comprar y descansar.
+      🡒 Elegí <b>cualquier casilla</b>: en la villa no hay caminos fijos, vas donde querés. De noche, el risco es que te crucen <b>de noche</b>. En la <b>Esquina del Almacén</b> y la <b>Casita del Tano</b> podés comprar y descansar.
     </div>
     <div class="panel" id="log-panel" style="margin-top:14px;">
       <b class="neon" style="font-size:.8rem;">📻 NOVEDADES DE LA ZONA</b>
@@ -191,6 +203,7 @@
     </div>
     <button id="btn-rest" class="primary" style="width:100%; margin-top:14px;">🛌 VOLVER A LA CASITA A DESCANSAR (solo desde la casita)</button>
     <button id="btn-codes" style="width:100%; margin-top:10px;">🎁 CÓDIGOS</button>
+    <button id="btn-work" style="width:100%; margin-top:10px;">💪 LABURAR Y GANAR PLATA</button>
   </section>
 
   <!-- COMBATE -->
@@ -266,7 +279,6 @@
         <button id="btn-codes-ok" class="primary">CANJEAR</button>
         <button id="btn-codes-close">CERRAR</button>
       </div>
-      <div id="codes-list"></div>
     </div>
   </div>
 
@@ -316,17 +328,19 @@ const LOCATIONS = {
 };
 
 const WEAPONS = {
-  navaja:{ name:"Navaja de resorte", icon:"🔪", dmg:[3,7], crit:0.10, ammo:false },
-  cuchillo:{ name:"Cuchillo de carnicero", icon:"🥩", dmg:[6,11], crit:0.15, ammo:false },
-  machete:{ name:"Machete viejo", icon:"🌾", dmg:[10,17], crit:0.20, ammo:false },
-  p45:{ name:"Pistola cal. alto (.45)", icon:"🔫", dmg:[20,36], crit:0.30, ammo:true }
+  navaja:{ name:"Navaja de resorte", icon:"🔪", dmg:[3,7], crit:0.10, ammoKey:null },
+  cuchillo:{ name:"Cuchillo de carnicero", icon:"🥩", dmg:[6,11], crit:0.15, ammoKey:null },
+  machete:{ name:"Machete viejo", icon:"🌾", dmg:[10,17], crit:0.20, ammoKey:null },
+  p45:{ name:"Pistola cal. alto (.45)", icon:"🔫", dmg:[20,36], crit:0.30, ammoKey:"p45" },
+  escopeta:{ name:"Escopeta de bombeo", icon:"💥", dmg:[14,26], crit:0.20, ammoKey:"escopeta" }
 };
 
 const ITEMS = {
   venda:{ name:"Venda", icon:"🩹", heal:30, cost:12 },
   empanada:{ name:"Empanada de Don Omar", icon:"🥟", heal:20, cost:8 },
   gaseosa:{ name:"Gaseosa de la heladera", icon:"🥤", heal:10, cost:4 },
-  balas:{ name:"Cargador .45 (6 balas)", icon:"🧨", ammo:6, cost:25 }
+  balas:{ name:"Cargador .45 (6 balas)", icon:"🧨", ammo:6, ammoKey:"p45", cost:25 },
+  cartuchos:{ name:"Cartuchos de escopeta (6)", icon:"💥", ammo:6, ammoKey:"escopeta", cost:20 }
 };
 
 const ENEMIES = [
@@ -360,7 +374,7 @@ const BOSSES = {
 
 const S = {
   name:"Tano", lv:1, xp:0, xpNext:30,
-  hp:100, maxHp:100, money:0, ammo:0,
+  hp:100, maxHp:100, money:0, ammo:0, shotAmmo:0,
   weapon:"navaja",
   loc:"esquina",
   visited:{ esquina:true },
@@ -379,41 +393,39 @@ function addItem(id, n){
 }
 function xpNeeded(lv){ return 25 + lv*15; }
 
+function ammoCount(w){
+  return w.ammoKey === "escopeta" ? S.shotAmmo : S.ammo;
+}
+function addAmmo(key, n){
+  if(key === "escopeta") S.shotAmmo += n; else S.ammo += n;
+}
+
 /* ============ CÓDIGOS ============ */
 
-const CODES = {
-  villanoche:{ desc:"+1000 mangos", ok:"¡Código villanoche: +1000 mangos!", log:"🎁 Código <b>villanoche</b>: +1000 mangos.",
-    effect:()=>{ S.money += 1000; } },
-  novedad:{ desc:"+3 vendas y +25 de vida máxima", ok:"¡Código NOVEDAD: 3 vendas y +25 de vida máxima!",
-    log:"🎁 Código <b>NOVEDAD</b>: 3 vendas y +25 de vida máxima.",
-    effect:()=>{ addItem("venda",3); S.maxHp += 25; S.hp = Math.min(S.maxHp, S.hp + 25); } },
-  bienarmado:{ desc:"−40% de daño recibido", ok:"¡Código bienarmado: reducción de daño −40%!",
-    log:"🎁 Código <b>bienarmado</b>: reducción de daño −40%.",
-    effect:()=>{ S.damageReduction = 0.40; } }
-};
+function _dec(s){ let r = ""; for(let i=0; i<s.length; i++) r += String.fromCharCode(s.charCodeAt(i) ^ 0x5F); return r; }
+const CODES = {};
+[
+  [ ")633>10<7:", "¡1000 mangos más!", "🎁 Código canjeado: la villa paga bien.",
+    ()=>{ S.money += 1000; } ],
+  [ "10):;>;", "¡Tres vendas y vida máxima +25!", "🎁 Código canjeado: llegó novedad al rancho.",
+    ()=>{ addItem("venda",3); S.maxHp += 25; S.hp = Math.min(S.maxHp, S.hp + 25); } ],
+  [ "=6:1>-2>;0", "¡Reducción de daño −40%!", "🎁 Código canjeado: bien armado, se nota.",
+    ()=>{ S.damageReduction = 0.40; } ]
+].forEach(d => {
+  CODES[_dec(d[0])] = { ok: d[1], log: d[2], effect: d[3] };
+});
 
 function useCode(raw){
   const code = (raw || "").trim().toLowerCase();
   const fb = $("codes-feedback");
   const def = CODES[code];
-  if(!def){ fb.innerHTML = "❌ Código desconocido."; return; }
+  if(!def){ fb.innerHTML = "❌ Ese código no existe."; return; }
   if(S.codesUsed[code]){ fb.innerHTML = "⚠️ Ese código ya lo canjeaste."; return; }
   S.codesUsed[code] = true;
   def.effect();
   fb.innerHTML = "✅ " + def.ok;
   log(def.log, "loot");
   renderStats();
-  renderCodesPanel();
-}
-function renderCodesPanel(){
-  const list = $("codes-list"); list.innerHTML = "";
-  Object.keys(CODES).forEach(k=>{
-    const used = S.codesUsed[k];
-    const d = document.createElement("div");
-    d.innerHTML = `<span class="neon">▸ ${k}</span> — ${CODES[k].desc}
-      <span class="${used ? "good" : "dim"}">${used ? "✔ canjeado" : "disponible"}</span>`;
-    list.appendChild(d);
-  });
 }
 
 /* ============ UI ============ */
@@ -465,7 +477,7 @@ function renderStats(){
   $("s-hp").textContent = S.hp + "/" + S.maxHp;
   $("s-lv").textContent = S.lv;
   $("s-wp").textContent = w.icon + " " + w.name;
-  $("s-ammo").textContent = w.ammo ? S.ammo + " balas" : "—";
+  $("s-ammo").textContent = w.ammoKey ? (ammoCount(w) + (w.ammoKey==="escopeta" ? " cartuchos" : " balas .45")) : "—";
   $("s-money").textContent = "$" + S.money;
   $("s-dr").textContent = S.damageReduction>0 ? "−" + Math.round(S.damageReduction*100) + "%" : "—";
   $("hud-hp").style.width = (S.hp/S.maxHp*100) + "%";
@@ -495,8 +507,6 @@ function renderMap(){
 
 function travel(id, nodeEl){
   const from = LOCATIONS[S.loc], to = LOCATIONS[id];
-  const connected = from.conns.includes(id);
-  if(!connected){ die("No hay camino derecho hasta ahí de noche.","bad"); return; }
   if(id==="iglesia" && Object.keys(S.bossesKilled).length < 3){
     die("La iglesia está cerrada. Necesitás vencer a los tres jefes de la villa primero.","bad");
     return;
@@ -597,8 +607,8 @@ function startBattle(e){
 }
 function updateActions(){
   const w = WEAPONS[S.weapon];
-  $("btn-attack").disabled = busy || (w.ammo && S.ammo<=0);
-  $("btn-attack").textContent = w.ammo ? `🔫 DISPARAR (${S.ammo})` : `🔪 ATACAR`;
+  $("btn-attack").disabled = busy || (w.ammoKey && ammoCount(w)<=0);
+  $("btn-attack").textContent = w.ammoKey ? `🔫 DISPARAR (${ammoCount(w)})` : `🔪 ATACAR`;
   $("btn-crit").disabled = busy || S.hp <= 8; // arriesgado: pega fuerte pero te hiere
   $("btn-defend").disabled = busy;
   $("btn-item").disabled = busy;
@@ -618,18 +628,25 @@ function doPlayerAttack(risky){
   S.battleTurn++;
   const guaranteed = S.battleTurn % 5 === 0; // cada 5 turnos, crítico asegurado
   let dmg, crit = false;
-  if(w.ammo){
-    if(S.ammo<=0){
+  if(w.ammoKey){
+    if(ammoCount(w)<=0){
       S.battleTurn--;
       busy = false;
-      bLog(`<span class="bad">¡Fierro seco! Sin balas no hay crítico que valga.</span>`,"hit");
+      bLog(`<span class="bad">¡Fierro seco! Sin munición no hay crítico que valga.</span>`,"hit");
       return;
     }
-    S.ammo--;
-    dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
-    if(guaranteed){ dmg = w.dmg[1]; } // el crítico siempre hace el daño máximo
-    crit = guaranteed;
-    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.${crit?' <span class="neon">¡CRÍTICO! Daño máximo: '+w.dmg[1]+'</span>':''}`);
+    addAmmo(w.ammoKey, -1);
+    if(w.ammoKey === "escopeta"){
+      dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
+      if(guaranteed){ dmg = w.dmg[1]; }
+      crit = guaranteed;
+      bLog(`💥 <b>¡PUM!</b> La escopeta atruena la noche con un remanazo de ${dmg}.${crit?' <span class="neon">¡CRÍTICO! Daño máximo: '+w.dmg[1]+'</span>':''}`);
+    } else {
+      dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
+      if(guaranteed){ dmg = w.dmg[1]; } // el crítico siempre hace el daño máximo
+      crit = guaranteed;
+      bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.${crit?' <span class="neon">¡CRÍTICO! Daño máximo: '+w.dmg[1]+'</span>':''}`);
+    }
   } else {
     crit = guaranteed || Math.random() < w.crit + (risky?0.15:0);
     if(risky){
@@ -746,8 +763,9 @@ function useItem(id){
     setTimeout(enemyTurn, 700);
   } else if(it.ammo){
     addItem(id,-1);
-    S.ammo += it.ammo;
-    bLog(`🧨 Cargaste <b>${it.ammo} balas</b>.`);
+    addAmmo(it.ammoKey, it.ammo);
+    const word = it.ammoKey === "escopeta" ? "cartuchos" : "balas";
+    bLog(`🧨 Cargaste <b>${it.ammo} ${word}</b>.`);
     renderStats();
     setTimeout(enemyTurn, 700);
   } else {
@@ -768,10 +786,10 @@ const SHOPS = {
     items:["venda","empanada","gaseosa"] },
   clandestino:{ title:"🏭 EL LOCAL CLANDESTINO DEL CHINO",
     flavor:"\"Llegaste de madrugada, bárbaro. El fierro lo conseguí de un encargo, no preguntes de dónde salió. Solo pagá.\" — el chino",
-    items:["balas"] }
+    items:["balas","cartuchos"] }
 };
 
-const WEAPON_PRICES = { cuchillo:90, machete:260, p45:550 };
+const WEAPON_PRICES = { cuchillo:90, machete:260, escopeta:450, p45:550 };
 
 function renderShop(id){
   const sh = SHOPS[id] || SHOPS.donomar;
@@ -780,7 +798,10 @@ function renderShop(id){
   const box = $("shop-items"); box.innerHTML = "";
 
   const extra = [];
-  if(id !== "clandestino" && WEAPONS[S.weapon].ammo) extra.push("balas");
+  if(id !== "clandestino"){
+    if(WEAPONS[S.weapon].ammoKey === "p45") extra.push("balas");
+    if(WEAPONS[S.weapon].ammoKey === "escopeta") extra.push("cartuchos");
+  }
   const allItems = sh.items.concat(extra);
   allItems.forEach(id2=>{
     const it = ITEMS[id2];
@@ -813,7 +834,7 @@ function renderShop(id){
 }
 
 function renderWeaponShop(box, shopId){
-  ["navaja","cuchillo","machete","p45"].forEach(wid=>{
+  ["navaja","cuchillo","machete","escopeta","p45"].forEach(wid=>{
     const w = WEAPONS[wid];
     const cost = wid === "navaja" ? 0 : WEAPON_PRICES[wid];
     const have = S.weapon === wid;
@@ -832,7 +853,11 @@ function renderWeaponShop(box, shopId){
       b.onclick = ()=>{
         S.money -= cost;
         S.weapon = wid;
-        if(wid === "p45"){ S.ammo += 12; log("🔫 Compraste la <b>.45 calibre alto</b> con 12 balas.", "loot"); die(w.icon + " " + w.name + " con 12 balas");
+        if(w.ammoKey){
+          addAmmo(w.ammoKey, 12);
+          const word = w.ammoKey === "escopeta" ? "cartuchos" : "balas";
+          log(`${w.icon} Compraste la <b>${w.name}</b> con 12 ${word}.`, "loot");
+          die(w.icon + " " + w.name + " con 12 " + word);
         } else log(`${w.icon} Compraste el <b>${w.name}</b>.`, "loot");
         renderShop(shopId); renderStats();
       };
@@ -842,7 +867,7 @@ function renderWeaponShop(box, shopId){
   });
   const note = document.createElement("div");
   note.className = "dim";
-  note.textContent = "🧨 En esta vidriera también se consiguen balas .45 (más arriba). Se paga antes que se pregunta.";
+  note.textContent = "🧨 Balas .45 y cartuchos de escopeta también se consiguen acá (más arriba). Se paga antes que se pregunta.";
   box.appendChild(note);
 }
 
@@ -901,10 +926,10 @@ function init(){
   $("btn-codes").onclick = ()=>{
     $("codes-feedback").textContent = "";
     $("codes-input").value = "";
-    renderCodesPanel();
     $("codes-overlay").classList.remove("hidden");
     setTimeout(()=>$("codes-input").focus(), 50);
   };
+  $("btn-work").onclick = doWork;
   $("btn-codes-ok").onclick = ()=> useCode($("codes-input").value);
   $("btn-codes-close").onclick = ()=> $("codes-overlay").classList.add("hidden");
   $("codes-input").addEventListener("keydown", e=>{ if(e.key === "Enter") useCode($("codes-input").value);
@@ -919,6 +944,28 @@ function init(){
   $("btn-again").onclick = ()=>{ resetGame(false); };
 }
 
+function doWork(){
+  const hasShotgun = S.weapon === "escopeta";
+  const pay = (25 + S.lv*8) + (hasShotgun ? 35 : 0);
+  const xpGain = rnd(6, 12);
+  S.money += pay;
+  S.turns++;
+  golden(xpGain);
+  renderStats();
+  if(hasShotgun){
+    log(`🚚 Laburaste de custodio en el depósito, escopeta al hombro. <b>+$${pay}</b> (+${xpGain} XP).`, "loot");
+    die("Custodio: +$" + pay);
+  } else {
+    log(`📦 Hiciste changas de descarga en el galpón del puerto. <b>+$${pay}</b> (+${xpGain} XP).`, "loot");
+    die("Changa hecha: +$" + pay);
+  }
+  if(Math.random() < 0.12){
+    log("🌒 Mientras laburabas, un pibe se quedó mirando la plata. Te quiere arrebatar la cartera...", "sys");
+    show("battle");
+    startBattle(generateEnemy(S.loc));
+    return;
+  }
+}
 function resetGame(fromAgain){
   Object.assign(S, {
     name:$("name-input").value.trim() || "Tano",
