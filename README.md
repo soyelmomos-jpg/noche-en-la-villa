@@ -19,12 +19,16 @@ Todas las armas se compran en el **Local Clandestino del Chino** (un galpón sin
 
 ## 🎯 Crítico garantizado
 
-Cada **5 turnos** tu ataque es un **crítico garantizado**, sin importar el arma. El contador se ve en pantalla durante el combate.
+Cada **5 turnos** tu ataque es un **crítico garantizado**: pega el **daño máximo** de tu arma, sin importar cuál lleves. El contador se ve en pantalla durante el combate.
+
+## 🛡️ Defender
+
+En combate podés **defenderte**: no atacás ese turno, pero el golpe del rival llega **amortiguado (~55% menos daño)**.
 
 ## 🌙 Cómo se juega
 
 - Movete por el mapa de la villa de noche: cada viaje puede caerte un enfrentamiento.
-- Combate por turnos: atacar, golpe arriesgado, objetos o huir.
+- Combate por turnos: atacar, golpe arriesgado, defender, objetos o huir.
 - Comprá armas en el Local Clandestino del Chino y provisiones en el Almacén de Don Omar.
 - Ganás mangos y XP, mejorás de nivel y encará el final: la Iglesia Quemada.
 - Para entrar a la iglesia tenés que vencer a los tres jefes de la villa (El Narigón, El Zurdo y el Jefe del Distrito).

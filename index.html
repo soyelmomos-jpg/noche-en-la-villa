@@ -140,8 +140,9 @@
     <div class="panel dim" style="font-size:.82rem; line-height:1.65;">
       <b class="neon">¿CÓMO SE JUEGA?</b><br>
       Movete por el <b>mapa de la villa</b> de noche: cada viaje puede caerte un <b>enfrentamiento</b>.
-      En el combate por turnos usá tu arma, pegás golpes arriesgados, curás con objetos o huís.
-      <b>Cada 5 turnos tu ataque es crítico garantizado</b>. Ganás <b>mangos</b> y <b>XP</b>,
+      En el combate por turnos usá tu arma, pegás golpes arriesgados, <b>te defendés</b> (no atacás,
+      pero recibís ~55% menos), curás con objetos o huís.
+      <b>Cada 5 turnos tu ataque es crítico garantizado con el daño máximo.</b> Ganás <b>mangos</b> y <b>XP</b>,
       y las armas pesadas (cuchillo, machete, .45) las comprás en el <b>Local Clandestino del Chino</b>.
       El final te espera en <b>la iglesia quemada</b>.
     </div>
@@ -212,6 +213,7 @@
     <div class="actions" id="actions">
       <button id="btn-attack" class="primary">🔪 ATACAR</button>
       <button id="btn-crit" disabled>💥 GOLPE ARRIESGADO</button>
+      <button id="btn-defend">🛡️ DEFENDER</button>
       <button id="btn-item">🎒 OBJETOS</button>
       <button id="btn-flee">🏃 HUIR</button>
     </div>
@@ -510,10 +512,12 @@ function rnd(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
 let enemy = null;
 let busy = false;
 let fleeBlocked = false;
+let defending = false;
 
 function startBattle(e){
   enemy = e;
   busy = false;
+  defending = false;
   fleeBlocked = e.isBoss;
   $("enemy-icon").textContent = e.icon;
   $("enemy-name").textContent = e.name;
@@ -531,20 +535,24 @@ function startBattle(e){
   show("battle");
 }
 function updateActions(){
-  $("btn-crit").disabled = S.hp <= 8; // arriesgado: pega fuerte pero te hiere
   const w = WEAPONS[S.weapon];
-  $("btn-attack").disabled = w.ammo && S.ammo<=0;
+  $("btn-attack").disabled = busy || (w.ammo && S.ammo<=0);
   $("btn-attack").textContent = w.ammo ? `🔫 DISPARAR (${S.ammo})` : `🔪 ATACAR`;
-  $("btn-flee").disabled = fleeBlocked;
+  $("btn-crit").disabled = busy || S.hp <= 8; // arriesgado: pega fuerte pero te hiere
+  $("btn-defend").disabled = busy;
+  $("btn-item").disabled = busy;
+  $("btn-flee").disabled = busy || fleeBlocked;
 }
 function updateCritIndicator(){
   const next = S.battleTurn + 1;
   const el = $("battle-crit");
   el.textContent = next % 5 === 0
-    ? "🎯 PRÓXIMO ATAQUE: ¡CRÍTICO GARANTIZADO!"
+    ? "🎯 PRÓXIMO ATAQUE: ¡CRÍTICO GARANTIZADO! Daño máximo: " + WEAPONS[S.weapon].dmg[1]
     : "🎯 Próximo crítico garantizado en " + (5 - next % 5) + " turnos";
 }
 function doPlayerAttack(risky){
+  if(busy) return;
+  busy = true;
   const w = WEAPONS[S.weapon];
   S.battleTurn++;
   const guaranteed = S.battleTurn % 5 === 0; // cada 5 turnos, crítico asegurado
@@ -552,14 +560,15 @@ function doPlayerAttack(risky){
   if(w.ammo){
     if(S.ammo<=0){
       S.battleTurn--;
+      busy = false;
       bLog(`<span class="bad">¡Fierro seco! Sin balas no hay crítico que valga.</span>`,"hit");
       return;
     }
     S.ammo--;
     dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
-    if(guaranteed){ dmg = Math.round(w.dmg[1]*1.4); }
+    if(guaranteed){ dmg = w.dmg[1]; } // el crítico siempre hace el daño máximo
     crit = guaranteed;
-    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.${crit?' <span class="neon">¡CRÍTICO!</span>':''}`);
+    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.${crit?' <span class="neon">¡CRÍTICO! Daño máximo: '+w.dmg[1]+'</span>':''}`);
   } else {
     crit = guaranteed || Math.random() < w.crit + (risky?0.15:0);
     if(risky){
@@ -567,8 +576,8 @@ function doPlayerAttack(risky){
       S.hp = Math.max(1, S.hp - selfDmg);
       bLog(`😤 Golpe arriesgado: te hacés <span class="bad">mella vos mismo (-${selfDmg})</span>.`);
     }
-    dmg = crit ? Math.round(rnd(w.dmg[0],w.dmg[1])*1.7) : rnd(w.dmg[0],w.dmg[1]);
-    const critTxt = crit ? " <span class='neon'>¡CRÍTICO!</span>" : "";
+    dmg = crit ? w.dmg[1] : rnd(w.dmg[0], w.dmg[1]); // el crítico siempre hace el daño máximo
+    const critTxt = crit ? " <span class='neon'>¡CRÍTICO! Daño máximo: " + w.dmg[1] + "</span>" : "";
     bLog(`${w.icon} Le tirás una ${w.name.toLowerCase()} y le hacés <span class="log-dmg">${dmg}</span>.${critTxt}`);
   }
   updateCritIndicator();
@@ -581,17 +590,31 @@ function doPlayerAttack(risky){
   setTimeout(enemyTurn, 650);
 }
 function enemyTurn(){
-  const dmg = rnd(enemy.dmg[0], enemy.dmg[1]);
+  const mult = defending ? 0.45 : 1; // defendido: recibís menos daño
+  defending = false;
+  const dmg = Math.max(1, Math.round(rnd(enemy.dmg[0], enemy.dmg[1]) * mult));
   S.hp = Math.max(0, S.hp - dmg);
   $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
   renderStats();
-  bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.`);
+  const guardTxt = mult < 1 ? " <span class='good'>(te defendiste, golpe amortiguado −55%)</span>" : "";
+  bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.${guardTxt}`);
   document.body.classList.remove("flash-red"); void document.body.offsetWidth;
   document.body.classList.add("flash-red");
   if(S.hp<=0){ setTimeout(playerDied, 600); return; }
+  busy = false;
   updateActions();
 }
+function doDefend(){
+  if(busy) return;
+  busy = true;
+  defending = true;
+  bLog("🛡️ Te plantás y bancás el hachazo: no atacás, pero recibís mucho menos.");
+  updateActions();
+  setTimeout(enemyTurn, 650);
+}
 function endBattle(){
+  busy = false;
+  defending = false;
   const loot = rnd(enemy.loot[0], enemy.loot[1]);
   S.money += loot;
   S.kills++;
@@ -630,9 +653,12 @@ function playerDied(){
   setEnd(false);
 }
 function tryFlee(){
+  if(busy) return;
   if(fleeBlocked){ bLog(`<span class="bad">No se puede huir de ${enemy.name}.</span>`); return; }
+  busy = true;
   if(Math.random() < 0.55){
     bLog("🏃 Te perdés entre las sombras… lográs escapar.");
+    busy = false;
     S.loc = "esquina";
     die("Huiste a la seguridad de la esquina.", "ok");
     show("map");
@@ -644,6 +670,8 @@ function tryFlee(){
   }
 }
 function useItem(id){
+  if(busy) return;
+  busy = true;
   const it = ITEMS[id];
   if(it.heal){
     S.hp = Math.min(S.maxHp, S.hp + it.heal);
@@ -658,6 +686,8 @@ function useItem(id){
     bLog(`🧨 Cargaste <b>${it.ammo} balas</b>.`);
     renderStats();
     setTimeout(enemyTurn, 700);
+  } else {
+    busy = false;
   }
   show("battle");
   updateActions();
@@ -807,6 +837,7 @@ function init(){
   $("btn-attack").onclick = ()=> doPlayerAttack(false);
   $("btn-crit").onclick = ()=> doPlayerAttack(true);
   $("btn-flee").onclick = tryFlee;
+  $("btn-defend").onclick = doDefend;
   $("btn-item").onclick = ()=>{ renderInv(); show("inv"); };
   $("btn-shop-back").onclick = ()=>{ renderStats(); show("map"); };
   $("btn-inv-back").onclick = ()=>{ renderStats(); show("battle"); };
