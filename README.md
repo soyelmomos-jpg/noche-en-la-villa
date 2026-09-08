@@ -25,6 +25,16 @@ Cada **5 turnos** tu ataque es un **crítico garantizado**: pega el **daño máx
 
 En combate podés **defenderte**: no atacás ese turno, pero el golpe del rival llega **amortiguado (~55% menos daño)**.
 
+## 🎁 Códigos
+
+Desde el botón **CÓDIGOS** en el mapa podés canjear cheats (una sola vez por partida):
+
+| Código | Efecto |
+|---|---|
+| `villanoche` | +1000 mangos |
+| `NOVEDAD` | +3 vendas y +25 de vida máxima |
+| `bienarmado` | −40% de daño recibido (permanente) |
+
 ## 🌙 Cómo se juega
 
 - Movete por el mapa de la villa de noche: cada viaje puede caerte un enfrentamiento.

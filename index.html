@@ -109,6 +109,11 @@
   @keyframes flash{0%{background:rgba(255,45,80,.25)}100%{background:transparent}}
   .toast{background:#1c1230; border:1px solid var(--neon2); color:var(--text); padding:8px 16px; border-radius:10px; font-weight:700; box-shadow:0 0 20px rgba(124,77,255,.5);}
   .toast.bad{border-color:var(--bad); color:#ffb0b0; box-shadow:0 0 20px rgba(255,45,80,.5);}
+  .overlay{position:fixed; inset:0; z-index:1001; display:flex; align-items:center; justify-content:center; background:rgba(4,2,8,.82); backdrop-filter:blur(3px); padding:16px;}
+  .codes-box{width:min(430px, 94vw);}
+  .codes-box h3{letter-spacing:2px; margin-bottom:8px;}
+  #codes-feedback{min-height:20px; font-size:.82rem; margin:8px 0; font-weight:700;}
+  #codes-list{font-size:.82rem; line-height:1.8; border-top:1px dashed rgba(124,77,255,.25); margin-top:10px; padding-top:8px;}
   .fade-in{animation:fadeIn .35s;}
   @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
   @media(max-width:480px){
@@ -169,6 +174,7 @@
           <tr><td class="stat-icons">🔫 Arma</td><td id="s-wp">Navaja de resorte</td></tr>
           <tr><td class="stat-icons">🧨 Munición</td><td id="s-ammo">0 balas</td></tr>
           <tr><td class="stat-icons">💰 Mangos</td><td id="s-money">0</td></tr>
+          <tr><td class="stat-icons">🛡️ Reducción de daño</td><td id="s-dr">—</td></tr>
         </table>
       </div>
     </div>
@@ -184,6 +190,7 @@
       <div id="log"></div>
     </div>
     <button id="btn-rest" class="primary" style="width:100%; margin-top:14px;">🛌 VOLVER A LA CASITA A DESCANSAR (solo desde la casita)</button>
+    <button id="btn-codes" style="width:100%; margin-top:10px;">🎁 CÓDIGOS</button>
   </section>
 
   <!-- COMBATE -->
@@ -248,6 +255,20 @@
   </section>
 
 </div>
+
+<!-- CÓDIGOS -->
+  <div id="codes-overlay" class="overlay hidden">
+    <div class="panel codes-box">
+      <h3 class="neon">🎁 CÓDIGOS</h3>
+      <input id="codes-input" type="text" maxlength="20" placeholder="escribí un código..." autocomplete="off" spellcheck="false">
+      <p id="codes-feedback" class="dim"></p>
+      <div class="row mb4">
+        <button id="btn-codes-ok" class="primary">CANJEAR</button>
+        <button id="btn-codes-close">CERRAR</button>
+      </div>
+      <div id="codes-list"></div>
+    </div>
+  </div>
 
 <script>
 "use strict";
@@ -347,7 +368,9 @@ const S = {
   items:{},
   kills:0,
   turns:0,
-  battleTurn:0
+  battleTurn:0,
+  damageReduction:0,
+  codesUsed:{}
 };
 
 function addItem(id, n){
@@ -355,6 +378,43 @@ function addItem(id, n){
   if(S.items[id] <= 0) delete S.items[id];
 }
 function xpNeeded(lv){ return 25 + lv*15; }
+
+/* ============ CÓDIGOS ============ */
+
+const CODES = {
+  villanoche:{ desc:"+1000 mangos", ok:"¡Código villanoche: +1000 mangos!", log:"🎁 Código <b>villanoche</b>: +1000 mangos.",
+    effect:()=>{ S.money += 1000; } },
+  novedad:{ desc:"+3 vendas y +25 de vida máxima", ok:"¡Código NOVEDAD: 3 vendas y +25 de vida máxima!",
+    log:"🎁 Código <b>NOVEDAD</b>: 3 vendas y +25 de vida máxima.",
+    effect:()=>{ addItem("venda",3); S.maxHp += 25; S.hp = Math.min(S.maxHp, S.hp + 25); } },
+  bienarmado:{ desc:"−40% de daño recibido", ok:"¡Código bienarmado: reducción de daño −40%!",
+    log:"🎁 Código <b>bienarmado</b>: reducción de daño −40%.",
+    effect:()=>{ S.damageReduction = 0.40; } }
+};
+
+function useCode(raw){
+  const code = (raw || "").trim().toLowerCase();
+  const fb = $("codes-feedback");
+  const def = CODES[code];
+  if(!def){ fb.innerHTML = "❌ Código desconocido."; return; }
+  if(S.codesUsed[code]){ fb.innerHTML = "⚠️ Ese código ya lo canjeaste."; return; }
+  S.codesUsed[code] = true;
+  def.effect();
+  fb.innerHTML = "✅ " + def.ok;
+  log(def.log, "loot");
+  renderStats();
+  renderCodesPanel();
+}
+function renderCodesPanel(){
+  const list = $("codes-list"); list.innerHTML = "";
+  Object.keys(CODES).forEach(k=>{
+    const used = S.codesUsed[k];
+    const d = document.createElement("div");
+    d.innerHTML = `<span class="neon">▸ ${k}</span> — ${CODES[k].desc}
+      <span class="${used ? "good" : "dim"}">${used ? "✔ canjeado" : "disponible"}</span>`;
+    list.appendChild(d);
+  });
+}
 
 /* ============ UI ============ */
 
@@ -407,6 +467,7 @@ function renderStats(){
   $("s-wp").textContent = w.icon + " " + w.name;
   $("s-ammo").textContent = w.ammo ? S.ammo + " balas" : "—";
   $("s-money").textContent = "$" + S.money;
+  $("s-dr").textContent = S.damageReduction>0 ? "−" + Math.round(S.damageReduction*100) + "%" : "—";
   $("hud-hp").style.width = (S.hp/S.maxHp*100) + "%";
   $("hud-xp").style.width = (S.xp/xpNeeded(S.lv)*100) + "%";
   $("hud-name").textContent = "🚶 " + S.name;
@@ -590,14 +651,17 @@ function doPlayerAttack(risky){
   setTimeout(enemyTurn, 650);
 }
 function enemyTurn(){
-  const mult = defending ? 0.45 : 1; // defendido: recibís menos daño
+  const guardMult = defending ? 0.55 : 1; // defendido: recibís un 45% menos del daño restante
   defending = false;
-  const dmg = Math.max(1, Math.round(rnd(enemy.dmg[0], enemy.dmg[1]) * mult));
+  let dmg = Math.round(rnd(enemy.dmg[0], enemy.dmg[1]) * guardMult);
+  dmg = Math.round(dmg * (1 - S.damageReduction)); // reducción del código (0 a 40%)
+  dmg = Math.max(1, dmg);
   S.hp = Math.max(0, S.hp - dmg);
   $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
   renderStats();
-  const guardTxt = mult < 1 ? " <span class='good'>(te defendiste, golpe amortiguado −55%)</span>" : "";
-  bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.${guardTxt}`);
+  const guardTxt = (guardMult < 1 ? " <span class='good'>(te defendiste)</span>" : "") + (S.damageReduction>0 ? ` <span class='good'>(−${Math.round(S.damageReduction*100)}% daño)</span>` : "");
+  if(guardTxt) bLog(`🛡️ Banco el ataque de ${enemy.name}: <span class="bad">${dmg}</span> de daño${guardTxt}`);
+  else bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.`);
   document.body.classList.remove("flash-red"); void document.body.offsetWidth;
   document.body.classList.add("flash-red");
   if(S.hp<=0){ setTimeout(playerDied, 600); return; }
@@ -834,6 +898,17 @@ function init(){
     log("🛌 Descansaste en el rancho. Vida al máximo.", "good");
     renderStats();
   };
+  $("btn-codes").onclick = ()=>{
+    $("codes-feedback").textContent = "";
+    $("codes-input").value = "";
+    renderCodesPanel();
+    $("codes-overlay").classList.remove("hidden");
+    setTimeout(()=>$("codes-input").focus(), 50);
+  };
+  $("btn-codes-ok").onclick = ()=> useCode($("codes-input").value);
+  $("btn-codes-close").onclick = ()=> $("codes-overlay").classList.add("hidden");
+  $("codes-input").addEventListener("keydown", e=>{ if(e.key === "Enter") useCode($("codes-input").value);
+    if(e.key === "Escape") $("codes-overlay").classList.add("hidden"); });
   $("btn-attack").onclick = ()=> doPlayerAttack(false);
   $("btn-crit").onclick = ()=> doPlayerAttack(true);
   $("btn-flee").onclick = tryFlee;
@@ -856,7 +931,9 @@ hp:100, maxHp:100, money:15, ammo:0,
     items:{ empanada:2, venda:1 },
     kills:0,
     turns:0,
-    battleTurn:0
+    battleTurn:0,
+    damageReduction:0,
+    codesUsed:{}
   });
   $("log").innerHTML = "";
   $("battle-log").innerHTML = "";
