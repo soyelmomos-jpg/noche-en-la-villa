@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Noche en la Villa — RPG</title>
+<style>
+  :root{
+    --bg1:#0b0612; --bg2:#160c22; --neon:#ff2d78; --neon2:#7c4dff;
+    --text:#e8e3f0; --dim:#8a809c; --good:#4ade80; --bad:#ff5252;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 500px at 20% -10%, rgba(124,77,255,.25), transparent 60%),
+      radial-gradient(900px 700px at 110% 110%, rgba(255,45,120,.12), transparent 55%),
+      linear-gradient(180deg, var(--bg1), var(--bg2));
+    color:var(--text);
+    min-height:100%;
+    overflow-x:hidden;
+  }
+  /* grano y viñeta noche */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:999;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px);
+    mix-blend-mode:overlay;
+  }
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:999;
+    background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,.55) 100%);
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:18px 14px 40px; position:relative; z-index:1;}
+  .hidden{display:none !important;}
+  .logo{
+    text-align:center; letter-spacing:3px; font-weight:900; line-height:1;
+  }
+  .logo .n{font-size:2.1rem; text-shadow:0 0 18px var(--neon), 0 0 40px rgba(255,45,120,.4);}
+  .logo .v{display:block; font-size:.95rem; color:var(--neon2); margin-top:6px; letter-spacing:6px;}
+  .subtitle{text-align:center; color:var(--dim); font-size:.85rem; margin:10px 0 22px;}
+  .panel{
+    background:rgba(18,12,30,.82); border:1px solid rgba(124,77,255,.25);
+    border-radius:14px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.5);
+  }
+  button{
+    font-family:inherit; cursor:pointer;
+    background:linear-gradient(180deg,#2a1b45,#1c1230);
+    color:var(--text); border:1px solid rgba(124,77,255,.5);
+    padding:10px 14px; border-radius:10px; font-size:.95rem; font-weight:700;
+    transition:transform .08s, box-shadow .15s, background .15s;
+  }
+  button:hover{box-shadow:0 0 14px rgba(124,77,255,.5); transform:translateY(-1px);}
+  button:active{transform:translateY(1px);}
+  button.primary{background:linear-gradient(180deg,#ff2d78,#b3124f); border-color:#ff8ab2;}
+  button.primary:hover{box-shadow:0 0 16px rgba(255,45,120,.6);}
+  button:disabled{opacity:.4; cursor:not-allowed; transform:none; box-shadow:none;}
+  input[type=text]{
+    width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(124,77,255,.4);
+    background:#0f0a18; color:var(--text); font-size:1rem; margin:8px 0 12px; outline:none;
+  }
+  input[type=text]:focus{border-color:var(--neon2);}
+  label{font-size:.78rem; color:var(--dim); text-transform:uppercase; letter-spacing:1px;}
+  .row{display:flex; gap:10px; flex-wrap:wrap;}
+  .row > *{flex:1;}
+  .barouter{background:#0f0a18; border:1px solid #3a2f52; border-radius:999px; height:16px; overflow:hidden;}
+  .barfill{height:100%; border-radius:999px; transition:width .25s;}
+  .hp .barfill{background:linear-gradient(90deg,#ff5252,#ff2d78);}
+  .xp .barfill{background:linear-gradient(90deg,#7c4dff,#22d3ee);}
+  .mb4{margin-bottom:14px;}
+  .dim{color:var(--dim);}
+  .good{color:var(--good);} .bad{color:var(--bad);} .neon{color:var(--neon);}
+  .big{font-size:1.5rem;}
+  table.stats{width:100%; border-collapse:collapse; font-size:.9rem;}
+  table.stats td{padding:5px 4px; border-bottom:1px solid rgba(124,77,255,.12);}
+  table.stats td:last-child{text-align:right; color:var(--neon2); font-weight:700;}
+  .stat-icons{font-size:1.05rem;}
+  /* mapa */
+  .map{display:flex; flex-wrap:wrap; gap:10px; justify-content:center;}
+  .node{
+    width:150px; min-height:96px; padding:10px; border-radius:12px; text-align:center;
+    background:rgba(20,13,34,.9); border:1px solid rgba(124,77,255,.3); cursor:pointer;
+    transition:box-shadow .15s, transform .1s; position:relative;
+  }
+  .node:hover:not(.locked){border-color:var(--neon2); box-shadow:0 0 12px rgba(124,77,255,.4); transform:translateY(-2px);}
+  .node .icon{font-size:1.7rem; display:block; margin-bottom:4px;}
+  .node .nm{font-weight:700; font-size:.85rem;}
+  .node .st{font-size:.68rem; color:var(--dim);}
+  .node.locked{opacity:.45; cursor:not-allowed;}
+  .node.web {border-color:rgba(255,45,120,.5);}
+  .node.web:hover{border-color:var(--neon); box-shadow:0 0 12px rgba(255,45,120,.45);}
+  .node.current{outline:2px solid var(--neon2); outline-offset:2px;}
+  .visited::before{content:"✔"; position:absolute; top:4px; right:6px; font-size:.7rem; color:var(--good);}
+  /* log */
+  #log{max-height:190px; overflow-y:auto; font-size:.85rem; line-height:1.5;}
+  #log div{padding:2px 0; border-bottom:1px dashed rgba(124,77,255,.1);}
+  #log .log-sys{color:var(--dim);}
+  #log .log-hit{color:var(--bad);}
+  #log .log-dmg{color:var(--neon2);}
+  #log .log-loot{color:var(--good);}
+  /* combate */
+  .enemy-card{text-align:center; padding:20px 10px; background:rgba(255,45,120,.06); border:1px solid rgba(255,45,120,.35); border-radius:12px; margin-bottom:12px;}
+  .enemy-card .eicon{font-size:3rem;}
+  .actions{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .battle-fx{position:fixed; inset:0; pointer-events:none; z-index:1000; display:flex; align-items:center; justify-content:center;}
+  .shake{animation:shake .3s;}
+  @keyframes shake{0%,100%{transform:translate(0,0)}25%{transform:translate(-6px,2px)}50%{transform:translate(5px,-2px)}75%{transform:translate(-4px,-2px)}}
+  .flash-red{animation:flash .35s;}
+  @keyframes flash{0%{background:rgba(255,45,80,.25)}100%{background:transparent}}
+  .toast{background:#1c1230; border:1px solid var(--neon2); color:var(--text); padding:8px 16px; border-radius:10px; font-weight:700; box-shadow:0 0 20px rgba(124,77,255,.5);}
+  .toast.bad{border-color:var(--bad); color:#ffb0b0; box-shadow:0 0 20px rgba(255,45,80,.5);}
+  .fade-in{animation:fadeIn .35s;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+  @media(max-width:480px){
+    .actions{grid-template-columns:1fr 1fr;}
+    .node{width:46%;}
+  }
+  .footer{text-align:center; color:var(--dim); font-size:.72rem; margin-top:26px;}
+  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-thumb{background:#3a2f52; border-radius:8px;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- PORTADA -->
+  <section id="screen-menu">
+    <h1 class="logo">
+      <span class="n">NOCHE EN LA VILLA</span>
+      <span class="v">UN RPG URBANO</span>
+    </h1>
+    <p class="subtitle">La villa duerme... menos algunos. Esta noche te toca a vos.<br>Machetes, cuchillos, navajas y pistola calibre alto. Sobreviví hasta el amanecer.</p>
+    <div class="panel mb4">
+      <label>¿Cómo te dicen acá?</label>
+      <input id="name-input" type="text" maxlength="14" placeholder="Tu apodo en la villa..." value="Tano">
+      <div class="row">
+        <button id="btn-start" class="primary">🌙 NUEVA PARTIDA</button>
+      </div>
+    </div>
+    <div class="panel dim" style="font-size:.82rem; line-height:1.65;">
+      <b class="neon">¿CÓMO SE JUEGA?</b><br>
+      Movete por el <b>mapa de la villa</b> de noche: cada viaje puede caerte un <b>enfrentamiento</b>.
+      En el combate por turnos usá tu arma, pegás golpes arriesgados, curás con objetos o huís.
+      Ganás <b>mangos</b> y <b>XP</b>, mejores armas y encará el final: <b>la iglesia quemada</b>.
+    </div>
+    <p class="footer">Hecho con el corazón en la villa. 🗡️🔫</p>
+  </section>
+
+  <!-- MAPA -->
+  <section id="screen-map" class="hidden">
+    <div class="row mb4">
+      <div class="panel">
+        <div class="row" style="align-items:center;">
+          <div style="flex:2;">
+            <div class="big" id="hud-name">🚶 Tano</div>
+            <div class="dim" id="hud-loc">En: La Esquina</div>
+          </div>
+          <div style="flex:3;">
+            <div class="barouter hp mb4"><div class="barfill" id="hud-hp" style="width:100%"></div></div>
+            <div class="barouter xp"><div class="barfill" id="hud-xp" style="width:0%"></div></div>
+          </div>
+        </div>
+        <table class="stats" style="margin-top:10px;">
+          <tr><td class="stat-icons">❤️ Vida</td><td id="s-hp">100/100</td></tr>
+          <tr><td class="stat-icons">🏅 Nivel</td><td id="s-lv">1</td></tr>
+          <tr><td class="stat-icons">🔫 Arma</td><td id="s-wp">Navaja de resorte</td></tr>
+          <tr><td class="stat-icons">🧨 Munición</td><td id="s-ammo">0 balas</td></tr>
+          <tr><td class="stat-icons">💰 Mangos</td><td id="s-money">0</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="panel mb4">
+      <h3 style="letter-spacing:2px; margin-bottom:12px;">🗺️ MAPA DE LA VILLA</h3>
+      <div class="map" id="map-container"></div>
+    </div>
+    <div class="panel dim" style="font-size:.8rem;">
+      🡒 Elegí un destino (los conectados a tu lugar). El risco es que te crucen <b>de noche</b>. En la <b>Esquina del Almacén</b> y la <b>Casita del Tano</b> podés comprar y descansar.
+    </div>
+    <div class="panel" id="log-panel" style="margin-top:14px;">
+      <b class="neon" style="font-size:.8rem;">📻 NOVEDADES DE LA ZONA</b>
+      <div id="log"></div>
+    </div>
+    <button id="btn-rest" class="primary" style="width:100%; margin-top:14px;">🛌 VOLVER A LA CASITA A DESCANSAR (solo desde la casita)</button>
+  </section>
+
+  <!-- COMBATE -->
+  <section id="screen-battle" class="hidden">
+    <div class="panel enemy-card fade-in" id="enemy-card">
+      <div class="eicon" id="enemy-icon">🧟</div>
+      <div style="font-weight:900; font-size:1.1rem;" id="enemy-name">CHORRO</div>
+      <div class="dim" id="enemy-flavor">"Tirá la billetera y quedate quieto."</div>
+      <div style="margin-top:10px;" class="barouter hp"><div class="barfill" id="enemy-hp" style="width:100%"></div></div>
+      <div class="dim" style="font-size:.75rem; margin-top:4px;" id="enemy-hp-txt">75/75</div>
+    </div>
+
+    <div class="panel mb4">
+      <div class="row" style="align-items:center; margin-bottom:8px;">
+        <div style="flex:2; font-weight:800;" id="battle-you">🚶 Tano</div>
+        <div style="flex:3;"><div class="barouter hp"><div class="barfill" id="battle-hp" style="width:100%"></div></div></div>
+      </div>
+      <div class="dim" style="font-size:.8rem;" id="battle-weapon">🗡️ Navaja de resorte (3–7)</div>
+    </div>
+
+    <div class="panel mb4 fade-in">
+      <b class="neon" style="font-size:.8rem;">📻 ZONA ROJA</b>
+      <div id="battle-log" style="font-size:.85rem; line-height:1.5; border-top:1px dashed rgba(255,45,120,.2); margin-top:6px;"></div>
+    </div>
+
+    <div class="actions" id="actions">
+      <button id="btn-attack" class="primary">🔪 ATACAR</button>
+      <button id="btn-crit" disabled>💥 GOLPE ARRIESGADO</button>
+      <button id="btn-item">🎒 OBJETOS</button>
+      <button id="btn-flee">🏃 HUIR</button>
+    </div>
+  </section>
+
+  <!-- OBJETOS / TIENDA -->
+  <section id="screen-shop" class="hidden">
+    <h2 class="neon" id="shop-title">🏪 EL ALMACÉN DE DON OMAR</h2>
+    <div class="dim" id="shop-flavor"></div>
+    <div class="panel mb4" id="shop-items" style="margin-top:12px;"></div>
+    <div class="actions">
+      <button id="btn-shop-back" class="primary">↩ VOLVER</button>
+    </div>
+  </section>
+
+  <!-- OBJETOS (inventario) -->
+  <section id="screen-inv" class="hidden">
+    <h2 class="neon">🎒 MOCHILA</h2>
+    <div class="panel mb4" id="inv-items" style="margin-top:12px;"></div>
+    <div class="actions">
+      <button id="btn-inv-back" class="primary">↩ VOLVER</button>
+    </div>
+  </section>
+
+  <!-- FINAL -->
+  <section id="screen-end" class="hidden">
+    <h1 class="logo"><span class="n" id="end-title">AMANECE</span></h1>
+    <p class="subtitle" id="end-text"></p>
+    <div class="actions">
+      <button id="btn-again" class="primary">🌙 JUGAR OTRA VEZ</button>
+    </div>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ============ DATOS ============ */
+
+const LOCATIONS = {
+  esquina: {
+    name:"La Esquina del Almacén", icon:"🛖", desc:"La esquina de siempre. Don Omar ni cierra el almacén, nunca duerme.",
+    conns:["plazoleta","cancha"], shop:id => id==="provia" ? null : "Almacén de Don Omar", rest:0, danger:0
+  },
+  plazoleta:{
+    name:"La Plazoleta", icon:"🌳", desc:"Los pibes se juntan en el mástil. Esta noche hay menos luz y más sombras.",
+    conns:["esquina","terraza"], danger:1
+  },
+  cancha:{
+    name:"La Canchita", icon:"⚽", desc:"El potrero de tierra. Alguien la cortó el alumbrado.",
+    conns:["esquina","descampado"], danger:2
+  },
+  terraza:{
+    name:"La Casa de la Terraza", icon:"🏚️", desc:"El búnker de El Narigón. Se cuenta que guarda la guita del arrebato.",
+    conns:["plazoleta","casita"], boss:"narigon", danger:4
+  },
+  casita:{
+    name:"La Casita del Tano", icon:"🏠", desc:"Tu ranchito de chapa. Acá descansás, guardás cosas y rescatás turrones.",
+    conns:["terraza","puente"],
+    shop:"Ranchito del Tano", rest:"Recuperás toda la vida gratis en tu rancho."
+  },
+  puente:{
+    name:"El Puente del Saladero", icon:"🌉", desc:"Bajo el puente corre el rumor de que zafó El Zurdo.",
+    conns:["casita","descampado","iglesia"], boss:"zurdo", danger:3
+  },
+  descampado:{
+    name:"El Descampado", icon:"🕳️", desc:"Las casillas de madera y yuyos altos. Cuidado con los perros cimarrones.",
+    conns:["cancha","puente"], danger:3
+  },
+  iglesia:{
+    name:"La Iglesia Quemada", icon:"⛪", desc:"La puerta está abierta. De adentro sale luz de velas y un murmullo.",
+    conns:["puente"], boss:"jefe", danger:5, final:true
+  }
+};
+
+const WEAPONS = {
+  navaja:{ name:"Navaja de resorte", icon:"🔪", dmg:[3,7], crit:0.10, ammo:false },
+  cuchillo:{ name:"Cuchillo de carnicero", icon:"🥩", dmg:[6,11], crit:0.15, ammo:false },
+  machete:{ name:"Machete viejo", icon:"🌾", dmg:[10,17], crit:0.20, ammo:false },
+  p45:{ name:"Pistola cal. alto (.45)", icon:"🔫", dmg:[20,36], crit:0.30, ammo:true }
+};
+
+const ITEMS = {
+  venda:{ name:"Venda", icon:"🩹", heal:30, cost:12 },
+  empanada:{ name:"Empanada de Don Omar", icon:"🥟", heal:20, cost:8 },
+  gaseosa:{ name:"Gaseosa de la heladera", icon:"🥤", heal:10, cost:4 },
+  balas:{ name:"Cargador .45 (6 balas)", icon:"🧨", ammo:6, cost:25 }
+};
+
+const ENEMIES = [
+  { name:"Chorro de la Costanera", icon:"🧥", hp:[35,50], dmg:[5,9], loot:[8,16], xp:12,
+    say:"\"Pasámela toda y te dejamos ir tranquilo.\"" },
+  { name:"Los pibes de la otra cuadra", icon:"😒", hp:[40,55], dmg:[7,12], loot:[12,22], xp:15,
+    say:"\"Qué mirás, tano... acá no se mira.\"" },
+  { name:"Transa en la esquina", icon:"🧪", hp:[45,60], dmg:[8,13], loot:[15,28], xp:16,
+    say:"\"Si no tenés la plata, tenés el reloj.\"" },
+  { name:"Perro cimarrón", icon:"🐕", hp:[30,45], dmg:[6,12], loot:[4,10], xp:10,
+    say:"Gruñe entre los yuyos del descampado..." },
+  { name:"Falconero del barrio", icon:"🚙", hp:[55,70], dmg:[9,14], loot:[18,32], xp:18,
+    say:"\"El Falcon no para por miedo, pibe.\"" },
+  { name:"Encañonador de la parada", icon:"🧢", hp:[50,65], dmg:[8,14], loot:[16,30], xp:17,
+    say:"\"Quedate quietito y no grites.\"" },
+];
+
+const BOSSES = {
+  narigon:{ name:"EL NARIGÓN", icon:"😤", hp:95, dmg:[11,17], loot:[60,90], xp:40,
+    say:"\"Esta terraza es mía. Vos sos de afuera.\"", drop:"cuchillo",
+    flavor:"El que cobra el derecho de piso. Tiene un cuchillo de carnicero colgando del cinto." },
+  zurdo:{ name:"EL ZURDO", icon:"🧛", hp:120, dmg:[13,19], loot:[80,120], xp:55,
+    say:"\"Bajo el puente las reglas son mías.\"", drop:"machete",
+    flavor:"Ex-carnicero que mandó a más de uno al Saladero. Empuña un machete." },
+  jefe:{ name:"EL JEFE DEL DISTRITO", icon:"👺", hp:160, dmg:[16,24], loot:[150,250], xp:100,
+    say:"\"Vos no entendés nada, changuito. La villa es mía desde las 3.\"", drop:"p45",
+    flavor:"El que maneja todo de noche. En el altar de la iglesia quemada, con una pistola .45 sobre la mesa." }
+};
+
+/* ============ ESTADO ============ */
+
+const S = {
+  name:"Tano", lv:1, xp:0, xpNext:30,
+  hp:100, maxHp:100, money:0, ammo:0,
+  weapon:"navaja",
+  loc:"esquina",
+  visited:{ esquina:true },
+  bossesKilled:{},
+  items:{},
+  kills:0,
+  turns:0
+};
+
+function addItem(id, n){
+  S.items[id] = (S.items[id]||0) + n;
+  if(S.items[id] <= 0) delete S.items[id];
+}
+function xpNeeded(lv){ return 25 + lv*15; }
+
+/* ============ UI ============ */
+
+const $ = id => document.getElementById(id);
+const LOG = [];
+function log(msg, cls){
+  LOG.push({msg, cls});
+  const d = $("log"), el = document.createElement("div");
+  el.className = "log-" + (cls||"sys");
+  el.innerHTML = msg;
+  d.appendChild(el);
+  d.scrollTop = d.scrollHeight;
+  while(d.children.length > 60) d.removeChild(d.firstChild);
+}
+function bLog(msg, cls){
+  const d = $("battle-log"), el = document.createElement("div");
+  el.className = "log-" + (cls||"sys");
+  el.innerHTML = msg;
+  d.appendChild(el);
+  d.scrollTop = d.scrollHeight;
+  while(d.children.length > 40) d.removeChild(d.firstChild);
+}
+function die(msg, cls){
+  const toast = document.createElement("div");
+  toast.className = "toast" + (cls==="bad"?" bad":"") ;
+  toast.id = "toast-el";
+  toast.textContent = msg;
+  const w = document.querySelector(".wrap");
+  w.appendChild(toast);
+  const bw = $("battle-fx") || null;
+  if(bw) bw.appendChild(toast.cloneNode(true));
+  w.removeChild(toast);
+  const holder = document.createElement("div");
+  holder.className = "battle-fx";
+  holder.appendChild(toast);
+  document.body.appendChild(holder);
+  setTimeout(()=>holder.remove(), 1600);
+}
+function show(screen){
+  ["menu","map","battle","shop","inv","end"].forEach(s=>{
+    $("screen-"+s).classList.toggle("hidden", s!==screen);
+  });
+  if(screen==="map") renderMap();
+}
+
+function renderStats(){
+  const w = WEAPONS[S.weapon];
+  $("s-hp").textContent = S.hp + "/" + S.maxHp;
+  $("s-lv").textContent = S.lv;
+  $("s-wp").textContent = w.icon + " " + w.name;
+  $("s-ammo").textContent = w.ammo ? S.ammo + " balas" : "—";
+  $("s-money").textContent = "$" + S.money;
+  $("hud-hp").style.width = (S.hp/S.maxHp*100) + "%";
+  $("hud-xp").style.width = (S.xp/xpNeeded(S.lv)*100) + "%";
+  $("hud-name").textContent = "🚶 " + S.name;
+  $("hud-loc").textContent = "En: " + LOCATIONS[S.loc].name;
+  const mul = S.hp<=S.maxHp*0.3 ? " (⚠)" : "";
+  $("hud-name").textContent += mul;
+}
+
+function renderMap(){
+  const c = $("map-container"); c.innerHTML = "";
+  Object.keys(LOCATIONS).forEach(id=>{
+    const L = LOCATIONS[id];
+    const d = document.createElement("div");
+    d.className = "node";
+    if(S.loc===id) d.classList.add("current");
+    if(S.visited[id]) d.classList.add("visited");
+    if(L.boss && S.bossesKilled[L.boss]) d.classList.add("locked");
+    d.innerHTML = `<span class="icon">${L.icon}</span><span class="nm">${L.name}</span><span class="st">${L.desc.substring(0,38)}...</span>`;
+    d.onclick = ()=>{ if(!(L.boss && S.bossesKilled[L.boss])) travel(id, d); };
+    c.appendChild(d);
+  });
+}
+
+/* ============ VIAJAR / ENCUENTROS ============ */
+
+function travel(id, nodeEl){
+  const from = LOCATIONS[S.loc], to = LOCATIONS[id];
+  const connected = from.conns.includes(id);
+  if(!connected){ die("No hay camino derecho hasta ahí de noche.","bad"); return; }
+  if(id==="iglesia" && Object.keys(S.bossesKilled).length < 3){
+    die("La iglesia está cerrada. Necesitás vencer a los tres jefes de la villa primero.","bad");
+    return;
+  }
+  S.turns++;
+  log(`🚶 Caminás de <b>${from.name}</b> a <b>${to.name}</b> por las sombras...`);
+  S.loc = id;
+  S.visited[id] = true;
+
+  const enc = encounterChance(id);
+  if(enc !== null){
+    show("battle");
+    startBattle(generateEnemy(id), nodeReached);
+  } else {
+    nodeReached(id);
+  }
+}
+function nodeReached(id){
+  const L = LOCATIONS[id];
+  log(`🌙 Llegaste a <b>${L.name}</b>. ${L.desc}`, "sys");
+  if(L.boss && !S.bossesKilled[L.boss]){
+    show("battle");
+    startBattle(makeBoss(L.boss));
+    return;
+  }
+  if(L.shop){
+    show("shop");
+    renderShop(L.shop);
+    $("shop-flavor").textContent = L.shop==="Almacén de Don Omar"
+      ? "\"Pase, pase, que el que viene de noche viene apurado.\" — Don Omar"
+      : "\"Que no te vean con eso. Acá archivamos todo.\" — tu vieja tana.";
+    return;
+  }
+  if(L.rest){
+    S.hp = S.maxHp;
+    log(`🛌 ${L.rest}`, "good");
+  }
+  if(L.final){
+    // tocó una vez que termina el boss de la iglesia
+  }
+  renderStats();
+  show("map");
+}
+
+function encounterChance(locId){
+  const L = LOCATIONS[locId];
+  if(L.danger === 0) return null;
+  if(L.boss) return null; // ir derecho al jefe de la zona
+  // 55% de base, sube con peligro
+  const chance = Math.min(0.85, 0.55 + L.danger*0.06);
+  return Math.random() < chance;
+}
+
+function generateEnemy(locId){
+  const danger = LOCATIONS[locId].danger || 1;
+  let pool = ENEMIES.map(e=>({e, rank:Math.abs(danger - e.xp/18)}));
+  pool.sort((a,b)=>a.rank-b.rank);
+  const pick = Math.random() < 0.6 ? pool[0].e : pool[Math.floor(Math.random()*Math.min(pool.length,3))].e;
+  const hp = rnd(pick.hp[0], pick.hp[1]);
+  return { ...pick, curHp: hp, maxHp: hp, isBoss:false };
+}
+function makeBoss(id){
+  const b = BOSSES[id];
+  return { name:b.name, icon:b.icon, maxHp:b.hp, curHp:b.hp, dmg:[b.dmg[0], b.dmg[1]],
+    loot:[b.loot[0], b.loot[1]], xp:b.xp, say:b.say, drop:b.drop, isBoss:true,
+    flavor:b.flavor };
+}
+function rnd(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+
+/* ============ COMBATE ============ */
+
+let enemy = null;
+let busy = false;
+let fleeBlocked = false;
+
+function startBattle(e){
+  enemy = e;
+  busy = false;
+  fleeBlocked = e.isBoss;
+  $("enemy-icon").textContent = e.icon;
+  $("enemy-name").textContent = e.name;
+  $("enemy-flavor").textContent = e.say;
+  $("enemy-hp").style.width = "100%";
+  $("enemy-hp-txt").textContent = e.curHp + "/" + e.maxHp;
+  $("battle-you").textContent = "🚶 " + S.name + " (lvl " + S.lv + ")";
+  $("battle-weapon").textContent = WEAPONS[S.weapon].icon + " " + WEAPONS[S.weapon].name + " — " + WEAPONS[S.weapon].dmg[0] + "–" + WEAPONS[S.weapon].dmg[1];
+  $("battle-log").innerHTML = "";
+  $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
+  bLog(`<span class="neon">🔦 ${e.name}</span> — ${e.flavor||e.say}`);
+  renderStats();
+  updateActions();
+  show("battle");
+}
+function updateActions(){
+  $("btn-crit").disabled = S.hp <= 8; // arriesgado: pega fuerte pero te hiere
+  const w = WEAPONS[S.weapon];
+  $("btn-attack").disabled = w.ammo && S.ammo<=0;
+  $("btn-attack").textContent = w.ammo ? `🔫 DISPARAR (${S.ammo})` : `🔪 ATACAR`;
+  $("btn-flee").disabled = fleeBlocked;
+}
+function doPlayerAttack(risky){
+  const w = WEAPONS[S.weapon];
+  let dmg;
+  if(w.ammo){
+    if(S.ammo<=0){ bLog(`<span class="bad">¡Fierro seco! No tenés balas.</span>`,"hit"); return; }
+    S.ammo--;
+    dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
+    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.`);
+  } else {
+    const crit = Math.random() < w.crit + (risky?0.15:0);
+    if(risky){
+      const selfDmg = Math.round(S.maxHp*0.08);
+      S.hp = Math.max(1, S.hp - selfDmg);
+      bLog(`😤 Golpe arriesgado: te hacés <span class="bad">mella vos mismo (-${selfDmg})</span>.`);
+    }
+    dmg = crit ? Math.round(rnd(w.dmg[0],w.dmg[1])*1.7) : rnd(w.dmg[0],w.dmg[1]);
+    const critTxt = crit ? " <span class='neon'>¡CRÍTICO!</span>" : "";
+    bLog(`${w.icon} Le tirás una ${w.name.toLowerCase()} y le hacés <span class="log-dmg">${dmg}</span>.${critTxt}`);
+  }
+  enemy.curHp = Math.max(0, enemy.curHp - dmg);
+  $("enemy-hp").style.width = (enemy.curHp/enemy.maxHp*100) + "%";
+  $("enemy-hp-txt").textContent = enemy.curHp + "/" + enemy.maxHp;
+  $("enemy-card").classList.remove("shake"); void $("enemy-card").offsetWidth;
+  $("enemy-card").classList.add("shake");
+  if(enemy.curHp<=0){ setTimeout(endBattle, 500); return; }
+  setTimeout(enemyTurn, 650);
+}
+function enemyTurn(){
+  const dmg = rnd(enemy.dmg[0], enemy.dmg[1]);
+  S.hp = Math.max(0, S.hp - dmg);
+  $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
+  renderStats();
+  bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.`);
+  document.body.classList.remove("flash-red"); void document.body.offsetWidth;
+  document.body.classList.add("flash-red");
+  if(S.hp<=0){ setTimeout(playerDied, 600); return; }
+  updateActions();
+}
+function endBattle(){
+  const loot = rnd(enemy.loot[0], enemy.loot[1]);
+  S.money += loot;
+  S.kills++;
+  const dropMsg = enemy.drop ? ` ¡Cayó un <b>${WEAPONS[enemy.drop].icon} ${WEAPONS[enemy.drop].name}</b>!` : "";
+  if(enemy.drop && S.weapon===enemy.drop && enemy.drop==="p45") S.ammo += 18;
+  golden(enemy.xp);
+  bLog(`<span class="log-loot">💰 Levantás $${loot} de los bolsillos del caído.</span>` + dropMsg);
+  if(enemy.isBoss) S.bossesKilled[enemy.name===BOSSES.narigon.name?"narigon":enemy.name===BOSSES.zurdo.name?"zurdo":"jefe"] = true;
+  if(enemy.drop){
+    if(enemy.drop==="p45"){ S.weapon="p45"; S.ammo += 18; log(`🔫 Conseguiste la <b>.45 calibre alto</b> ${enemy.name==="EL JEFE DEL DISTRITO"?"del Jefe":"del Zurdo"}!`, "loot");
+    } else { S.weapon = enemy.drop; log(`${WEAPONS[enemy.drop].icon} Cambiaste a <b>${WEAPONS[enemy.drop].name}</b>.`, "loot"); }
+  }
+  die(enemy.drop ? "¡CAYÓ " + (enemy.isBoss?enemy.name:"el rival") + " + equipamiento!" : "¡Rival liquidado! +$" + loot, "ok");
+  S.loc = S.loc; // queda donde estaba
+  renderStats();
+  if(enemy.isBoss && enemy.name === BOSSES.jefe.name){
+    setEnd(true);
+    return;
+  }
+  show("map");
+}
+function golden(amt){
+  S.xp += amt;
+  while(S.xp >= xpNeeded(S.lv)){
+    S.xp -= xpNeeded(S.lv);
+    S.lv++;
+    S.maxHp += 12;
+    S.hp = S.maxHp;
+    log(`🏅 <b>¡Subiste a nivel ${S.lv}!</b> +12 de vida.`, "good");
+    bLog(`<span class="good">🏅 ¡Nivel ${S.lv}!</span>`);
+  }
+}
+function playerDied(){
+  bLog(`<span class="bad">💀 Cayeron en la villa de noche...</span>`);
+  die("💀 TE AGRARRARON DE NOCHE…", "bad");
+  setEnd(false);
+}
+function tryFlee(){
+  if(fleeBlocked){ bLog(`<span class="bad">No se puede huir de ${enemy.name}.</span>`); return; }
+  if(Math.random() < 0.55){
+    bLog("🏃 Te perdés entre las sombras… lográs escapar.");
+    S.loc = "esquina";
+    die("Huiste a la seguridad de la esquina.", "ok");
+    show("map");
+    renderMap();
+    renderStats();
+  } else {
+    bLog(`<span class="bad">Te quieren agarrar, no te van a soltar.</span>`);
+    enemyTurn();
+  }
+}
+function useItem(id){
+  const it = ITEMS[id];
+  if(it.heal){
+    S.hp = Math.min(S.maxHp, S.hp + it.heal);
+    addItem(id,-1);
+    bLog(`${it.icon} Usaste <b>${it.name}</b> +${it.heal} HP.`);
+    $("battle-hp").style.width = (S.hp/S.maxHp*100)+"%";
+    renderStats();
+    setTimeout(enemyTurn, 700);
+  } else if(it.ammo){
+    addItem(id,-1);
+    S.ammo += it.ammo;
+    bLog(`🧨 Cargaste <b>${it.ammo} balas</b>.`);
+    renderStats();
+    setTimeout(enemyTurn, 700);
+  }
+  show("battle");
+  updateActions();
+}
+
+/* ============ TIENDA / INVENTARIO ============ */
+
+function renderShop(title){
+  const w = WEAPONS[S.weapon];
+  $("shop-title").textContent = (title==="Ranchito del Tano" ? "🏠 " : "🏪 ") + title;
+  const box = $("shop-items"); box.innerHTML = "";
+  ["venda","empanada","gaseosa"].concat(w.ammo?["balas"]:[]).forEach(id=>{
+    const it = ITEMS[id];
+    const d = document.createElement("div");
+    d.className = "panel fade-in";
+    d.style.cssText = "margin-bottom:10px; display:flex; align-items:center; gap:10px;";
+    d.innerHTML = `<div style="flex:1; font-size:1rem;">${it.icon} <b>${it.name}</b></div>
+      <div class="dim" style="font-size:.8rem;">x$<b>${it.cost}</b></div>`;
+    const b = document.createElement("button");
+    b.textContent = "COMPRAR";
+    b.disabled = S.money < it.cost;
+    b.onclick = ()=>{
+      S.money -= it.cost; addItem(id,1);
+      renderShop(title); renderStats();
+      die("Compraste " + it.name + "."); 
+      log(`${it.icon} Compraste <b>${it.name}</b>.`, "loot");
+    };
+    d.appendChild(b);
+    box.appendChild(d);
+  });
+  const empty = document.createElement("div");
+  empty.innerHTML = title==="Ranchito del Tano" ?
+    "<div class='dim'>Acá también hay un <b>baúl de armas</b>. Vendé las navajas que ya no usás.</div>" :
+    "<div class='dim'>Don Omar compra fierros a buen precio y se hace el sordo con los ruidos.</div>";
+  box.appendChild(empty);
+}
+
+function renderInv(){
+  const box = $("inv-items"); box.innerHTML = "";
+  const keys = Object.keys(S.items).filter(k=>S.items[k]>0);
+  if(keys.length===0){
+    box.innerHTML = "<div class='dim'>La mochila está vacía. Comprá algo en el almacén.</div>";
+    return;
+  }
+  keys.forEach(id=>{
+    const it = ITEMS[id];
+    const d = document.createElement("div");
+    d.className = "panel fade-in";
+    d.style.cssText = "margin-bottom:10px; display:flex; align-items:center; gap:10px;";
+    d.innerHTML = `<div style="flex:1;">${it.icon} <b>${it.name}</b> <span class="dim">x${S.items[id]}</span></div>`;
+    const b = document.createElement("button");
+    b.textContent = "USAR";
+    b.disabled = !(it.heal || it.ammo);
+    b.onclick = ()=>{ useItem(id); renderInv(); };
+    d.appendChild(b);
+    box.appendChild(d);
+  });
+}
+
+/* ============ FINAL ============ */
+
+function setEnd(won){
+  if(won){
+    $("end-title").textContent = "🌅 AMANECE EN LA VILLA";
+    $("end-text").innerHTML = `El alba pinta de celeste la iglesia quemada. Contaste la plata: <b>$${S.money}</b>.
+      <br><br>Mataste a <b>${S.kills}</b> que vinieron a robar la noche. Llegaste a <b>nivel ${S.lv}</b>.
+      <br><br>Los vecinos ya están poniendo las chapas nuevas. Esta noche, la villa durmió tranquila.`;
+  } else {
+    $("end-title").textContent = "💀 LA NOCHE SE LOS LLEVÓ";
+    $("end-text").innerHTML = `Cayó ${S.name} en la villa de noche, en la vuelta ${S.turns}.
+      <br><br>Peleó ${S.kills} veces y llegó a <b>nivel ${S.lv}</b> con $${S.money} en el bolsillo.
+      <br><br>Hay una leyenda que dice que, el que cae, se levanta en la Villa de las Sombras.`;
+  }
+  show("end");
+}
+
+/* ============ BOTONES ============ */
+
+function init(){
+  $("btn-start").onclick = ()=>{
+    S.name = $("name-input").value.trim() || "Tano";
+    resetGame();
+  };
+  $("btn-rest").onclick = ()=>{
+    if(S.loc!=="casita"){ die("Solo podés descansar en la Casita del Tano.","bad"); return; }
+    S.hp = S.maxHp;
+    log("🛌 Descansaste en el rancho. Vida al máximo.", "good");
+    renderStats();
+  };
+  $("btn-attack").onclick = ()=> doPlayerAttack(false);
+  $("btn-crit").onclick = ()=> doPlayerAttack(true);
+  $("btn-flee").onclick = tryFlee;
+  $("btn-item").onclick = ()=>{ renderInv(); show("inv"); };
+  $("btn-shop-back").onclick = ()=>{ renderStats(); show("map"); };
+  $("btn-inv-back").onclick = ()=>{ renderStats(); show("battle"); };
+  $("btn-again").onclick = ()=>{ resetGame(false); };
+}
+
+function resetGame(fromAgain){
+  Object.assign(S, {
+    name:$("name-input").value.trim() || "Tano",
+    lv:1, xp:0, xpNext:25+15,
+    hp:100, maxHp:100, money:0, ammo:0,
+    weapon:"navaja",
+    loc:"esquina",
+    visited:{ esquina:true },
+    bossesKilled:{},
+    items:{},
+    kills:0,
+    turns:0
+  });
+  $("log").innerHTML = "";
+  $("battle-log").innerHTML = "";
+  log("🌙 Arranca la noche en la villa. Tenés una navaja de resorte y la cara dura.", "sys");
+  log("Andá a la <b>Canchita</b> o a la <b>Plazoleta</b> a buscar problemas. O bajá al <b>Puente</b> cuando estés fuerte.", "sys");
+  renderStats();
+  show("map");
+}
+
+/* ============ ARRANQUE ============ */
+init();
+setEnd(false); // pre-carga pantallas ocultas
+show("menu");
+renderStats();
+</script>
+</body>
+</html>
