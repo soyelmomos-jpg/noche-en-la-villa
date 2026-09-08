@@ -11,14 +11,21 @@ Abrí el `index.html` en cualquier navegador o entrá por GitHub Pages (link del
 | Arma | Daño | Detalle |
 |---|---|---|
 | 🔪 Navaja de resorte | 3–7 | La inicial. Silenciosa. |
-| 🥩 Cuchillo de carnicero | 6–11 | Dropeo del Narigón. |
-| 🌾 Machete viejo | 10–17 | Dropeo del Zurdo. |
-| 🔫 Pistola cal. alto (.45) | 20–36 | Arma final, necesita munición. |
+| 🥩 Cuchillo de carnicero | 6–11 | Se compra en el Local Clandestino o dropea del Narigón. |
+| 🌾 Machete viejo | 10–17 | Se compra en el Local Clandestino o dropea del Zurdo. |
+| 🔫 Pistola cal. alto (.45) | 20–36 | Arma final, necesita munición. Se compra en el Local Clandestino. |
+
+Todas las armas se compran en el **Local Clandestino del Chino** (un galpón sin cartel cerca de la Plazoleta).
+
+## 🎯 Crítico garantizado
+
+Cada **5 turnos** tu ataque es un **crítico garantizado**, sin importar el arma. El contador se ve en pantalla durante el combate.
 
 ## 🌙 Cómo se juega
 
 - Movete por el mapa de la villa de noche: cada viaje puede caerte un enfrentamiento.
 - Combate por turnos: atacar, golpe arriesgado, objetos o huir.
+- Comprá armas en el Local Clandestino del Chino y provisiones en el Almacén de Don Omar.
 - Ganás mangos y XP, mejorás de nivel y encará el final: la Iglesia Quemada.
 - Para entrar a la iglesia tenés que vencer a los tres jefes de la villa (El Narigón, El Zurdo y el Jefe del Distrito).
 

@@ -141,7 +141,9 @@
       <b class="neon">¿CÓMO SE JUEGA?</b><br>
       Movete por el <b>mapa de la villa</b> de noche: cada viaje puede caerte un <b>enfrentamiento</b>.
       En el combate por turnos usá tu arma, pegás golpes arriesgados, curás con objetos o huís.
-      Ganás <b>mangos</b> y <b>XP</b>, mejores armas y encará el final: <b>la iglesia quemada</b>.
+      <b>Cada 5 turnos tu ataque es crítico garantizado</b>. Ganás <b>mangos</b> y <b>XP</b>,
+      y las armas pesadas (cuchillo, machete, .45) las comprás en el <b>Local Clandestino del Chino</b>.
+      El final te espera en <b>la iglesia quemada</b>.
     </div>
     <p class="footer">Hecho con el corazón en la villa. 🗡️🔫</p>
   </section>
@@ -199,6 +201,7 @@
         <div style="flex:3;"><div class="barouter hp"><div class="barfill" id="battle-hp" style="width:100%"></div></div></div>
       </div>
       <div class="dim" style="font-size:.8rem;" id="battle-weapon">🗡️ Navaja de resorte (3–7)</div>
+      <div class="neon" style="font-size:.72rem;" id="battle-crit">🎯 Próximo crítico garantizado en 4 turnos</div>
     </div>
 
     <div class="panel mb4 fade-in">
@@ -252,11 +255,11 @@
 const LOCATIONS = {
   esquina: {
     name:"La Esquina del Almacén", icon:"🛖", desc:"La esquina de siempre. Don Omar ni cierra el almacén, nunca duerme.",
-    conns:["plazoleta","cancha"], shop:id => id==="provia" ? null : "Almacén de Don Omar", rest:0, danger:0
+    conns:["plazoleta","cancha"], shop:"donomar", danger:0
   },
   plazoleta:{
     name:"La Plazoleta", icon:"🌳", desc:"Los pibes se juntan en el mástil. Esta noche hay menos luz y más sombras.",
-    conns:["esquina","terraza"], danger:1
+    conns:["esquina","terraza","bunker"], danger:1
   },
   cancha:{
     name:"La Canchita", icon:"⚽", desc:"El potrero de tierra. Alguien la cortó el alumbrado.",
@@ -269,7 +272,11 @@ const LOCATIONS = {
   casita:{
     name:"La Casita del Tano", icon:"🏠", desc:"Tu ranchito de chapa. Acá descansás, guardás cosas y rescatás turrones.",
     conns:["terraza","puente"],
-    shop:"Ranchito del Tano", rest:"Recuperás toda la vida gratis en tu rancho."
+    shop:"tano", rest:"Recuperás toda la vida gratis en tu rancho."
+  },
+  bunker:{
+    name:"El Local Clandestino del Chino", icon:"🏭", desc:"Un galpón sin cartel, una persiana y olor a azufre. No preguntes de dónde salen las cosas.",
+    conns:["plazoleta","descampado"], shop:"clandestino", danger:0
   },
   puente:{
     name:"El Puente del Saladero", icon:"🌉", desc:"Bajo el puente corre el rumor de que zafó El Zurdo.",
@@ -277,7 +284,7 @@ const LOCATIONS = {
   },
   descampado:{
     name:"El Descampado", icon:"🕳️", desc:"Las casillas de madera y yuyos altos. Cuidado con los perros cimarrones.",
-    conns:["cancha","puente"], danger:3
+    conns:["cancha","puente","bunker"], danger:3
   },
   iglesia:{
     name:"La Iglesia Quemada", icon:"⛪", desc:"La puerta está abierta. De adentro sale luz de velas y un murmullo.",
@@ -337,7 +344,8 @@ const S = {
   bossesKilled:{},
   items:{},
   kills:0,
-  turns:0
+  turns:0,
+  battleTurn:0
 };
 
 function addItem(id, n){
@@ -454,9 +462,6 @@ function nodeReached(id){
   if(L.shop){
     show("shop");
     renderShop(L.shop);
-    $("shop-flavor").textContent = L.shop==="Almacén de Don Omar"
-      ? "\"Pase, pase, que el que viene de noche viene apurado.\" — Don Omar"
-      : "\"Que no te vean con eso. Acá archivamos todo.\" — tu vieja tana.";
     return;
   }
   if(L.rest){
@@ -520,6 +525,7 @@ function startBattle(e){
   $("battle-log").innerHTML = "";
   $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
   bLog(`<span class="neon">🔦 ${e.name}</span> — ${e.flavor||e.say}`);
+  updateCritIndicator();
   renderStats();
   updateActions();
   show("battle");
@@ -531,16 +537,31 @@ function updateActions(){
   $("btn-attack").textContent = w.ammo ? `🔫 DISPARAR (${S.ammo})` : `🔪 ATACAR`;
   $("btn-flee").disabled = fleeBlocked;
 }
+function updateCritIndicator(){
+  const next = S.battleTurn + 1;
+  const el = $("battle-crit");
+  el.textContent = next % 5 === 0
+    ? "🎯 PRÓXIMO ATAQUE: ¡CRÍTICO GARANTIZADO!"
+    : "🎯 Próximo crítico garantizado en " + (5 - next % 5) + " turnos";
+}
 function doPlayerAttack(risky){
   const w = WEAPONS[S.weapon];
-  let dmg;
+  S.battleTurn++;
+  const guaranteed = S.battleTurn % 5 === 0; // cada 5 turnos, crítico asegurado
+  let dmg, crit = false;
   if(w.ammo){
-    if(S.ammo<=0){ bLog(`<span class="bad">¡Fierro seco! No tenés balas.</span>`,"hit"); return; }
+    if(S.ammo<=0){
+      S.battleTurn--;
+      bLog(`<span class="bad">¡Fierro seco! Sin balas no hay crítico que valga.</span>`,"hit");
+      return;
+    }
     S.ammo--;
     dmg = risky ? Math.round(w.dmg[1]*1.25) : rnd(w.dmg[0], w.dmg[1]);
-    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.`);
+    if(guaranteed){ dmg = Math.round(w.dmg[1]*1.4); }
+    crit = guaranteed;
+    bLog(`🔫 <b>¡PAM!</b> La .45 retumba en la noche y da <span class="log-dmg">${dmg}</span>.${crit?' <span class="neon">¡CRÍTICO!</span>':''}`);
   } else {
-    const crit = Math.random() < w.crit + (risky?0.15:0);
+    crit = guaranteed || Math.random() < w.crit + (risky?0.15:0);
     if(risky){
       const selfDmg = Math.round(S.maxHp*0.08);
       S.hp = Math.max(1, S.hp - selfDmg);
@@ -550,6 +571,7 @@ function doPlayerAttack(risky){
     const critTxt = crit ? " <span class='neon'>¡CRÍTICO!</span>" : "";
     bLog(`${w.icon} Le tirás una ${w.name.toLowerCase()} y le hacés <span class="log-dmg">${dmg}</span>.${critTxt}`);
   }
+  updateCritIndicator();
   enemy.curHp = Math.max(0, enemy.curHp - dmg);
   $("enemy-hp").style.width = (enemy.curHp/enemy.maxHp*100) + "%";
   $("enemy-hp-txt").textContent = enemy.curHp + "/" + enemy.maxHp;
@@ -643,12 +665,31 @@ function useItem(id){
 
 /* ============ TIENDA / INVENTARIO ============ */
 
-function renderShop(title){
-  const w = WEAPONS[S.weapon];
-  $("shop-title").textContent = (title==="Ranchito del Tano" ? "🏠 " : "🏪 ") + title;
+const SHOPS = {
+  donomar:{ title:"🏪 EL ALMACÉN DE DON OMAR",
+    flavor:"\"Pase, pase, que el que viene de noche viene apurado.\" — Don Omar",
+    items:["venda","empanada","gaseosa"] },
+  tano:{ title:"🏠 EL RANCHITO DEL TANO",
+    flavor:"\"Que no te vean con eso. Acá archivamos todo.\" — tu vieja tana.",
+    items:["venda","empanada","gaseosa"] },
+  clandestino:{ title:"🏭 EL LOCAL CLANDESTINO DEL CHINO",
+    flavor:"\"Llegaste de madrugada, bárbaro. El fierro lo conseguí de un encargo, no preguntes de dónde salió. Solo pagá.\" — el chino",
+    items:["balas"] }
+};
+
+const WEAPON_PRICES = { cuchillo:90, machete:260, p45:550 };
+
+function renderShop(id){
+  const sh = SHOPS[id] || SHOPS.donomar;
+  $("shop-title").textContent = sh.title;
+  $("shop-flavor").textContent = sh.flavor;
   const box = $("shop-items"); box.innerHTML = "";
-  ["venda","empanada","gaseosa"].concat(w.ammo?["balas"]:[]).forEach(id=>{
-    const it = ITEMS[id];
+
+  const extra = [];
+  if(id !== "clandestino" && WEAPONS[S.weapon].ammo) extra.push("balas");
+  const allItems = sh.items.concat(extra);
+  allItems.forEach(id2=>{
+    const it = ITEMS[id2];
     const d = document.createElement("div");
     d.className = "panel fade-in";
     d.style.cssText = "margin-bottom:10px; display:flex; align-items:center; gap:10px;";
@@ -658,19 +699,57 @@ function renderShop(title){
     b.textContent = "COMPRAR";
     b.disabled = S.money < it.cost;
     b.onclick = ()=>{
-      S.money -= it.cost; addItem(id,1);
-      renderShop(title); renderStats();
-      die("Compraste " + it.name + "."); 
+      S.money -= it.cost; addItem(id2,1);
+      renderShop(id); renderStats();
       log(`${it.icon} Compraste <b>${it.name}</b>.`, "loot");
+      die("Compraste " + it.name + ".");
     };
     d.appendChild(b);
     box.appendChild(d);
   });
-  const empty = document.createElement("div");
-  empty.innerHTML = title==="Ranchito del Tano" ?
-    "<div class='dim'>Acá también hay un <b>baúl de armas</b>. Vendé las navajas que ya no usás.</div>" :
-    "<div class='dim'>Don Omar compra fierros a buen precio y se hace el sordo con los ruidos.</div>";
-  box.appendChild(empty);
+
+  if(id === "clandestino") renderWeaponShop(box, id);
+  else {
+    const tip = document.createElement("div");
+    tip.innerHTML = id === "tano"
+      ? "<div class='dim'>Acá también hay un <b>baúl de armas</b> con lo que juntaste de los caídos.</div>"
+      : "<div class='dim'>Don Omar compra fierros a buen precio y se hace el sordo con los ruidos.</div>";
+    box.appendChild(tip);
+  }
+}
+
+function renderWeaponShop(box, shopId){
+  ["navaja","cuchillo","machete","p45"].forEach(wid=>{
+    const w = WEAPONS[wid];
+    const cost = wid === "navaja" ? 0 : WEAPON_PRICES[wid];
+    const have = S.weapon === wid;
+    const d = document.createElement("div");
+    d.className = "panel fade-in";
+    d.style.cssText = "margin-bottom:10px; display:flex; align-items:center; gap:10px;";
+    d.innerHTML = `<div style="flex:1; font-size:.95rem;">${w.icon} <b>${w.name}</b>
+      <span class="dim">${w.dmg[0]}–${w.dmg[1]} daño</span>${have?' <span class="good">✔ equipada</span>':''}</div>
+      ${cost>0?`<div class="dim">$${cost}</div>`:''}`;
+    const b = document.createElement("button");
+    if(have){ b.textContent = "EQUIPADA"; b.disabled = true; }
+    else if(wid === "navaja"){ b.textContent = "LA TENÉS"; b.disabled = true; }
+    else {
+      b.textContent = "COMPRAR";
+      b.disabled = S.money < cost;
+      b.onclick = ()=>{
+        S.money -= cost;
+        S.weapon = wid;
+        if(wid === "p45"){ S.ammo += 12; log("🔫 Compraste la <b>.45 calibre alto</b> con 12 balas.", "loot"); die(w.icon + " " + w.name + " con 12 balas");
+        } else log(`${w.icon} Compraste el <b>${w.name}</b>.`, "loot");
+        renderShop(shopId); renderStats();
+      };
+    }
+    d.appendChild(b);
+    box.appendChild(d);
+  });
+  const note = document.createElement("div");
+  note.className = "dim";
+  note.textContent = "🧨 En esta vidriera también se consiguen balas .45 (más arriba). Se paga antes que se pregunta.";
+  box.appendChild(note);
 }
 
 function renderInv(){
@@ -745,13 +824,14 @@ hp:100, maxHp:100, money:15, ammo:0,
     bossesKilled:{},
     items:{ empanada:2, venda:1 },
     kills:0,
-    turns:0
+    turns:0,
+    battleTurn:0
   });
   $("log").innerHTML = "";
   $("battle-log").innerHTML = "";
   log("🌙 Arranca la noche en la villa. Tenés una navaja de resorte, $15 en el bolsillo y dos empanadas de sobra.", "sys");
   log("Andá a la <b>Plazoleta</b> a probar la mano: de noche los pibes están medio dormidos.", "sys");
-  log("Cuando estés más fuerte, bajá a la <b>Canchita</b> o al <b>Puente</b>.", "sys");
+  log("Ojo con el <b>Local Clandestino del Chino</b> (por la Plazoleta): ahí se consiguen fierros pesados. 🎯 Un crítico cada 5 turnos, siempre.", "sys");
   renderStats();
   show("map");
 }
