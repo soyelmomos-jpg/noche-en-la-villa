@@ -20,7 +20,7 @@ Todas las armas se compran en el **Local Clandestino del Chino** (un galpón sin
 
 ## 💪 Laburar
 
-Botón **LABURAR** en el mapa: changas de descarga en el puerto (paga según tu nivel) y, si llevás la **escopeta**, laburás de **custodio** y cobrás mucho más. Cuidado: a veces, laburando, te cruza un pibe que te quiere arrebatar la plata...
+Botón **LABURAR** en el mapa: changas de descarga en el puerto (paga según tu nivel) y, si llevás la **escopeta**, laburás de **custodio** y cobrás mucho más. Cuidado: a veces, laburando, te cruza una **banda** que te quiere arrebatar la plata...
 
 ## 🎯 Crítico garantizado
 
@@ -33,7 +33,8 @@ En combate podés **defenderte**: no atacás ese turno, pero el golpe del rival 
 ## 🌙 Cómo se juega
 
 - Movete por el mapa de la villa de noche: elegí **cualquier casilla**, no hay caminos fijos. Cada viaje puede caerte un enfrentamiento.
-- Combate por turnos: atacar, golpe arriesgado, defender, objetos o huir.
+- Enfrentamientos **en banda**: a veces 2 o 3 rivales (mala suerte: hasta 4). Cuanto más lejos del centro, más probable que te rodeen varios. Atacan todos a la vez; el crítico le pega al líder del grupo.
+- Combate por turnos: atacar, golpe arriesgado, defender, objetos o huir (huir es más fácil cuando te superan en número).
 - Comprá armas en el Local Clandestino del Chino y provisiones en el Almacén de Don Omar.
 - Ganás mangos y XP, mejorás de nivel y encará el final: la Iglesia Quemada.
 - Para entrar a la iglesia tenés que vencer a los tres jefes de la villa (El Narigón, El Zurdo y el Jefe del Distrito).

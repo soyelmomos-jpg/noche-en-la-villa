@@ -195,7 +195,7 @@
       <div class="map" id="map-container"></div>
     </div>
     <div class="panel dim" style="font-size:.8rem;">
-      🡒 Elegí <b>cualquier casilla</b>: en la villa no hay caminos fijos, vas donde querés. De noche, el risco es que te crucen <b>de noche</b>. En la <b>Esquina del Almacén</b> y la <b>Casita del Tano</b> podés comprar y descansar.
+      🡒 Elegí <b>cualquier casilla</b>: en la villa no hay caminos fijos, vas donde querés. Cada viaje puede caerte un enfrentamiento... y <b>cuanto más lejos, más chances</b> de cruzarte una <b>banda</b> (2, 3 o hasta 4). En la <b>Esquina del Almacén</b> y la <b>Casita del Tano</b> podés comprar y descansar.
     </div>
     <div class="panel" id="log-panel" style="margin-top:14px;">
       <b class="neon" style="font-size:.8rem;">📻 NOVEDADES DE LA ZONA</b>
@@ -214,6 +214,7 @@
       <div class="dim" id="enemy-flavor">"Tirá la billetera y quedate quieto."</div>
       <div style="margin-top:10px;" class="barouter hp"><div class="barfill" id="enemy-hp" style="width:100%"></div></div>
       <div class="dim" style="font-size:.75rem; margin-top:4px;" id="enemy-hp-txt">75/75</div>
+      <div id="enemy-list"></div>
     </div>
 
     <div class="panel mb4">
@@ -519,7 +520,7 @@ function travel(id, nodeEl){
   const enc = encounterChance(id);
   if(enc !== null){
     show("battle");
-    startBattle(generateEnemy(id), nodeReached);
+    startBattle(buildEncounter(id));
   } else {
     nodeReached(id);
   }
@@ -529,7 +530,7 @@ function nodeReached(id){
   log(`🌙 Llegaste a <b>${L.name}</b>. ${L.desc}`, "sys");
   if(L.boss && !S.bossesKilled[L.boss]){
     show("battle");
-    startBattle(makeBoss(L.boss));
+    startBattle([makeBoss(L.boss)]);
     return;
   }
   if(L.shop){
@@ -580,30 +581,80 @@ function rnd(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
 
 /* ============ COMBATE ============ */
 
-let enemy = null;
+const DIST = (()=>{ // distancia en pasos desde la Esquina
+  const d = { esquina:0 }, q = ["esquina"];
+  while(q.length){
+    const c = q.shift();
+    (LOCATIONS[c].conns||[]).forEach(n=>{
+      if(d[n] === undefined){ d[n] = d[c] + 1; q.push(n); }
+    });
+  }
+  return d;
+})();
+function distFrom(loc){ return DIST[loc] !== undefined ? DIST[loc] : 1; }
+
+let enemies = [];
 let busy = false;
 let fleeBlocked = false;
 let defending = false;
+let lastBoss = null;
+let pendingLoot = 0, pendingXp = 0, pendingKills = 0;
 
-function startBattle(e){
-  enemy = e;
+function lead(){ return enemies[0]; }
+
+function rollEnemyCount(dist){
+  const multiChance = Math.min(0.9, 0.5 + dist*0.12); // más lejos => más probable que haya banda
+  if(Math.random() >= multiChance) return 1;
+  const r = Math.random();
+  if(r < 0.12 + dist*0.07) return 4;           // mala suerte
+  if(r < 0.50 + dist*0.07) return 3;
+  return 2;
+}
+function buildEncounter(locId){
+  const team = [];
+  const n = rollEnemyCount(distFrom(locId));
+  for(let i=0;i<n;i++) team.push(generateEnemy(locId));
+  return team;
+}
+
+function startBattle(team){
+  enemies = team.slice();
   busy = false;
   defending = false;
-  fleeBlocked = e.isBoss;
-  $("enemy-icon").textContent = e.icon;
-  $("enemy-name").textContent = e.name;
-  $("enemy-flavor").textContent = e.say;
-  $("enemy-hp").style.width = "100%";
-  $("enemy-hp-txt").textContent = e.curHp + "/" + e.maxHp;
+  lastBoss = enemies.find(e => e.isBoss) || null;
+  pendingLoot = 0; pendingXp = 0; pendingKills = 0;
+  fleeBlocked = enemies.some(e => e.isBoss);
+  $("enemy-icon").textContent = "";
   $("battle-you").textContent = "🚶 " + S.name + " (lvl " + S.lv + ")";
   $("battle-weapon").textContent = WEAPONS[S.weapon].icon + " " + WEAPONS[S.weapon].name + " — " + WEAPONS[S.weapon].dmg[0] + "–" + WEAPONS[S.weapon].dmg[1];
   $("battle-log").innerHTML = "";
   $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
-  bLog(`<span class="neon">🔦 ${e.name}</span> — ${e.flavor||e.say}`);
+  if(enemies.length === 1){
+    bLog(`<span class="neon">🔦 ${enemies[0].name}</span> — ${enemies[0].flavor||enemies[0].say}`);
+  } else {
+    bLog(`<span class="neon">🔦 TE RODEAN ${enemies.length}!</span> ${enemies.map(e=>e.icon+" "+e.name).join(" · ")}. Se te vienen todos encima.`);
+  }
+  renderEnemyGroup();
   updateCritIndicator();
   renderStats();
   updateActions();
   show("battle");
+}
+function renderEnemyGroup(){
+  if(!enemies.length) return;
+  const n = enemies.length;
+  $("enemy-icon").textContent = n > 1 ? "👥" : enemies[0].icon;
+  $("enemy-name").textContent = n > 1 ? "LA BANDA (" + n + ")" : enemies[0].name;
+  $("enemy-flavor").textContent = n > 1 ? enemies.map(e=>e.name).join(" + ") : enemies[0].say;
+  $("enemy-hp").style.width = (enemies[0].curHp/enemies[0].maxHp*100) + "%";
+  $("enemy-hp-txt").textContent = enemies[0].curHp + "/" + enemies[0].maxHp + (n>1 ? " (líder)" : "");
+  const list = $("enemy-list"); list.innerHTML = "";
+  enemies.forEach(en=>{
+    const d = document.createElement("div");
+    d.style.cssText = "margin-top:7px; font-size:.75rem; text-align:left;";
+    d.innerHTML = `${en.icon} <b>${en.name}</b> ` + (en.isBoss ? `<span class="neon">JEFE</span> ` : "") + `<div class="barouter hp" style="height:11px; margin-top:3px;"><div class="barfill" style="width:${(en.curHp/en.maxHp*100)}%"></div></div>`;
+    list.appendChild(d);
+  });
 }
 function updateActions(){
   const w = WEAPONS[S.weapon];
@@ -625,6 +676,7 @@ function doPlayerAttack(risky){
   if(busy) return;
   busy = true;
   const w = WEAPONS[S.weapon];
+  const target = lead();
   S.battleTurn++;
   const guaranteed = S.battleTurn % 5 === 0; // cada 5 turnos, crítico asegurado
   let dmg, crit = false;
@@ -659,26 +711,37 @@ function doPlayerAttack(risky){
     bLog(`${w.icon} Le tirás una ${w.name.toLowerCase()} y le hacés <span class="log-dmg">${dmg}</span>.${critTxt}`);
   }
   updateCritIndicator();
-  enemy.curHp = Math.max(0, enemy.curHp - dmg);
-  $("enemy-hp").style.width = (enemy.curHp/enemy.maxHp*100) + "%";
-  $("enemy-hp-txt").textContent = enemy.curHp + "/" + enemy.maxHp;
+  target.curHp = Math.max(0, target.curHp - dmg);
+  if(target.curHp <= 0){
+    pendingLoot += rnd(target.loot[0], target.loot[1]);
+    pendingXp += target.xp;
+    pendingKills++;
+    enemies = enemies.filter(e => e.curHp > 0);
+  }
   $("enemy-card").classList.remove("shake"); void $("enemy-card").offsetWidth;
   $("enemy-card").classList.add("shake");
-  if(enemy.curHp<=0){ setTimeout(endBattle, 500); return; }
+  renderEnemyGroup();
+  if(enemies.length <= 0){ setTimeout(endBattle, 500); return; }
   setTimeout(enemyTurn, 650);
 }
 function enemyTurn(){
   const guardMult = defending ? 0.55 : 1; // defendido: recibís un 45% menos del daño restante
   defending = false;
-  let dmg = Math.round(rnd(enemy.dmg[0], enemy.dmg[1]) * guardMult);
-  dmg = Math.round(dmg * (1 - S.damageReduction)); // reducción del código (0 a 40%)
-  dmg = Math.max(1, dmg);
-  S.hp = Math.max(0, S.hp - dmg);
+  let total = 0;
+  const parts = [];
+  enemies.forEach(en=>{
+    let d = Math.round(rnd(en.dmg[0], en.dmg[1]) * guardMult);
+    d = Math.round(d * (1 - S.damageReduction)); // reducción del código (0 a 40%)
+    d = Math.max(1, d);
+    total += d;
+    parts.push(`${en.name}(${d})`);
+  });
+  S.hp = Math.max(0, S.hp - total);
   $("battle-hp").style.width = (S.hp/S.maxHp*100) + "%";
   renderStats();
   const guardTxt = (guardMult < 1 ? " <span class='good'>(te defendiste)</span>" : "") + (S.damageReduction>0 ? ` <span class='good'>(−${Math.round(S.damageReduction*100)}% daño)</span>` : "");
-  if(guardTxt) bLog(`🛡️ Banco el ataque de ${enemy.name}: <span class="bad">${dmg}</span> de daño${guardTxt}`);
-  else bLog(`👊 ${enemy.name} te da <span class="bad">${dmg}</span>.`);
+  if(enemies.length === 1) bLog(`👊 ${enemies[0].name} te da <span class="bad">${total}</span>.${guardTxt}`);
+  else bLog(`👊 La banda te da <span class="bad">${total}</span> en total (${parts.join(", ")}).${guardTxt}`);
   document.body.classList.remove("flash-red"); void document.body.offsetWidth;
   document.body.classList.add("flash-red");
   if(S.hp<=0){ setTimeout(playerDied, 600); return; }
@@ -696,22 +759,22 @@ function doDefend(){
 function endBattle(){
   busy = false;
   defending = false;
-  const loot = rnd(enemy.loot[0], enemy.loot[1]);
+  const loot = pendingLoot;
   S.money += loot;
-  S.kills++;
-  const dropMsg = enemy.drop ? ` ¡Cayó un <b>${WEAPONS[enemy.drop].icon} ${WEAPONS[enemy.drop].name}</b>!` : "";
-  if(enemy.drop && S.weapon===enemy.drop && enemy.drop==="p45") S.ammo += 18;
-  golden(enemy.xp);
-  bLog(`<span class="log-loot">💰 Levantás $${loot} de los bolsillos del caído.</span>` + dropMsg);
-  if(enemy.isBoss) S.bossesKilled[enemy.name===BOSSES.narigon.name?"narigon":enemy.name===BOSSES.zurdo.name?"zurdo":"jefe"] = true;
-  if(enemy.drop){
-    if(enemy.drop==="p45"){ S.weapon="p45"; S.ammo += 18; log(`🔫 Conseguiste la <b>.45 calibre alto</b> ${enemy.name==="EL JEFE DEL DISTRITO"?"del Jefe":"del Zurdo"}!`, "loot");
-    } else { S.weapon = enemy.drop; log(`${WEAPONS[enemy.drop].icon} Cambiaste a <b>${WEAPONS[enemy.drop].name}</b>.`, "loot"); }
+  S.kills += pendingKills;
+  const bq = lastBoss;
+  const dropMsg = bq && bq.drop ? ` ¡Cayó un <b>${WEAPONS[bq.drop].icon} ${WEAPONS[bq.drop].name}</b>!` : "";
+  golden(pendingXp);
+  bLog(`<span class="log-loot">💰 Levantás $${loot} del paso.</span>` + dropMsg);
+  if(bq) S.bossesKilled[bq.name===BOSSES.narigon.name?"narigon":bq.name===BOSSES.zurdo.name?"zurdo":"jefe"] = true;
+  if(bq && bq.drop){
+    if(bq.drop==="p45"){ S.weapon="p45"; S.ammo += 18; log(`🔫 Conseguiste la <b>.45 calibre alto</b> ${bq.name==="EL JEFE DEL DISTRITO"?"del Jefe":"del Zurdo"}!`, "loot");
+    } else { S.weapon = bq.drop; log(`${WEAPONS[bq.drop].icon} Cambiaste a <b>${WEAPONS[bq.drop].name}</b>.`, "loot"); }
   }
-  die(enemy.drop ? "¡CAYÓ " + (enemy.isBoss?enemy.name:"el rival") + " + equipamiento!" : "¡Rival liquidado! +$" + loot, "ok");
+  die(bq && bq.drop ? "¡CAYÓ " + bq.name + " + equipamiento!" : (pendingKills>1 ? "¡Bandas liquidada! +$" + loot : "¡Rival liquidado! +$" + loot), "ok");
   S.loc = S.loc; // queda donde estaba
   renderStats();
-  if(enemy.isBoss && enemy.name === BOSSES.jefe.name){
+  if(bq && bq.name === BOSSES.jefe.name){
     setEnd(true);
     return;
   }
@@ -735,9 +798,10 @@ function playerDied(){
 }
 function tryFlee(){
   if(busy) return;
-  if(fleeBlocked){ bLog(`<span class="bad">No se puede huir de ${enemy.name}.</span>`); return; }
+  if(fleeBlocked){ bLog(`<span class="bad">No se puede huir de ${lead().name}.</span>`); return; }
   busy = true;
-  if(Math.random() < 0.55){
+  const bonus = enemies.length > 1 ? 0.12 * (enemies.length - 1) : 0;
+  if(Math.random() < 0.5 + bonus){
     bLog("🏃 Te perdés entre las sombras… lográs escapar.");
     busy = false;
     S.loc = "esquina";
@@ -960,9 +1024,9 @@ function doWork(){
     die("Changa hecha: +$" + pay);
   }
   if(Math.random() < 0.12){
-    log("🌒 Mientras laburabas, un pibe se quedó mirando la plata. Te quiere arrebatar la cartera...", "sys");
+    log("🌒 Mientras laburabas, una patota te vio la plata y te quiere arrebatar la cartera...", "sys");
     show("battle");
-    startBattle(generateEnemy(S.loc));
+    startBattle(buildEncounter(S.loc));
     return;
   }
 }
